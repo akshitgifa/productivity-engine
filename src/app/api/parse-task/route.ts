@@ -1,0 +1,54 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { NextResponse } from "next/server";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+const SYSTEM_PROMPT = `
+You are the brain of "Entropy UI", a high-performance productivity engine.
+Your task is to parse raw user input into a structured JSON object for task creation.
+
+Input: Raw text or audio transcript.
+Output: JSON object with:
+- task: The concise action item.
+- project: The inferred project name (be creative but logical).
+- duration: Estimated time (e.g., "15m", "1h", "4h").
+- energy: Energy type ("Grind", "Creative", "Shallow").
+  - Creative: High focus, non-linear (Design, Writing, R&D).
+  - Grind: High focus, linear (Coding, Spreadsheets, Logistics).
+  - Shallow: Low focus, quick (Email, Calls, Admin).
+
+Rules:
+1. If project is not obvious, use "Orbit".
+2. Default duration to "30m" if unspecified.
+3. Keep the JSON clean.
+`;
+
+export async function POST(req: Request) {
+  try {
+    const { input } = await req.json();
+
+    if (!input) {
+      return NextResponse.json({ error: "Missing input" }, { status: 400 });
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const result = await model.generateContent([
+      { text: SYSTEM_PROMPT },
+      { text: `User Input: "${input}"` },
+    ]);
+
+    const responseText = result.response.text();
+    // Extract JSON from response (handling potential markdown formatting)
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    const parsedData = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+
+    if (!parsedData) {
+      throw new Error("Failed to parse AI response");
+    }
+
+    return NextResponse.json(parsedData);
+  } catch (error) {
+    console.error("AI Parsing Error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
