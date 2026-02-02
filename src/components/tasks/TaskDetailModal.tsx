@@ -11,7 +11,10 @@ import {
   Clock, 
   ChevronRight,
   Loader2,
-  Square
+  Square,
+  Edit3,
+  Eye,
+  Sparkles
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -21,6 +24,8 @@ import { TaskNote, Subtask } from "@/types/database";
 import { Task } from "@/lib/engine";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface TaskDetailModalProps {
   task: Task;
@@ -41,48 +46,10 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task.title);
   const [editedDuration, setEditedDuration] = useState((task.durationMinutes || 30).toString());
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [editedNote, setEditedNote] = useState(task.description || "");
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editedSubtaskTitle, setEditedSubtaskTitle] = useState("");
-
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isEditingTitle && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isEditingTitle]);
-
-  useEffect(() => {
-    setEditedTitle(task.title);
-    setEditedDuration((task.durationMinutes || 30).toString());
-  }, [task.id, task.title, task.durationMinutes]);
-
-  // Queries
-  const { data: notes = [], isLoading: isLoadingNotes } = useQuery({
-    queryKey: ["tasks", task.id, "notes"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("task_notes")
-        .select("*")
-        .eq("task_id", task.id)
-        .order("created_at", { ascending: false });
-      return (data || []) as TaskNote[];
-    },
-    enabled: isOpen,
-  });
-
-  const { data: subtasks = [], isLoading: isLoadingSubtasks } = useQuery({
-    queryKey: ["tasks", task.id, "subtasks"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("subtasks")
-        .select("*")
-        .eq("task_id", task.id)
-        .order("created_at", { ascending: true });
-      return (data || []) as Subtask[];
-    },
-    enabled: isOpen,
-  });
 
   // Mutations
   const updateTaskMutation = useMutation({
@@ -90,11 +57,13 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
       await supabase.from("tasks").update(updates).eq("id", task.id);
     },
     onMutate: async (updates) => {
+      justSavedRef.current = true;
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
       // Map domain updates to domain names for the optimistic state
       const domainUpdates: any = {};
       if (updates.title) domainUpdates.title = updates.title;
       if (updates.est_duration_minutes) domainUpdates.durationMinutes = updates.est_duration_minutes;
+      if (updates.description !== undefined) domainUpdates.description = updates.description;
       
       queryClient.setQueryData(["tasks", "active"], (old: any) => 
         old?.map((t: any) => t.id === task.id ? { ...t, ...domainUpdates } : t)
@@ -147,24 +116,91 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "subtasks"] }),
   });
 
-  const addNoteMutation = useMutation({
-    mutationFn: async ({ content, isVoice }: { content: string; isVoice?: boolean }) => {
-      await supabase.from("task_notes").insert({ 
-        task_id: task.id, 
-        content, 
-        is_voice_transcript: !!isVoice 
-      });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const lastTaskId = useRef<string>(task.id);
+  const justSavedRef = useRef(false);
+  const isMountedRef = useRef(false);
+
+  // Initial mount - sync from prop
+  useEffect(() => {
+    setEditedNote(task.description || "");
+    lastTaskId.current = task.id;
+    isMountedRef.current = true;
+  }, []); // Empty deps = only on mount
+
+  useEffect(() => {
+    if (isEditingTitle && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isEditingTitle]);
+
+  // Sync state with props ONLY when task ID changes or not actively editing
+  useEffect(() => {
+    if (!isEditingTitle) {
+      setEditedTitle(task.title);
+    }
+    setEditedDuration((task.durationMinutes || 30).toString());
+  }, [task.id, task.title, task.durationMinutes, isEditingTitle]);
+
+  useEffect(() => {
+    // Skip on mount, let the mount effect handle it
+    if (!isMountedRef.current) return;
+
+    const hasTaskChanged = task.id !== lastTaskId.current;
+    
+    if (hasTaskChanged) {
+       setEditedNote(task.description || "");
+       lastTaskId.current = task.id;
+       setIsEditingNote(false);
+       justSavedRef.current = false;
+    } else if (!isEditingNote && !updateTaskMutation.isPending && !justSavedRef.current) {
+       // Only sync if the server has new data we don't have locally
+       if ((task.description || "") !== editedNote) {
+         setEditedNote(task.description || "");
+       }
+    }
+
+    // Reset the justSavedRef after a delay if mutation finished
+    if (!updateTaskMutation.isPending && justSavedRef.current) {
+      const timer = setTimeout(() => {
+        justSavedRef.current = false;
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [task.id, task.description, isEditingNote, updateTaskMutation.isPending, editedNote]);
+
+  // Debounced auto-save for the note
+  useEffect(() => {
+    if (!isEditingNote) return;
+
+    const timer = setTimeout(() => {
+      if (editedNote !== (task.description || "") && !updateTaskMutation.isPending) {
+        updateTaskMutation.mutate({ description: editedNote });
+      }
+    }, 2000); // 2s debounce for auto-save
+
+    return () => clearTimeout(timer);
+  }, [editedNote, isEditingNote, task.description, updateTaskMutation.isPending]);
+
+  // Notes and Subtasks queries
+  const { data: subtasks = [], isLoading: isLoadingSubtasks } = useQuery({
+    queryKey: ["tasks", task.id, "subtasks"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("subtasks")
+        .select("*")
+        .eq("task_id", task.id)
+        .order("created_at", { ascending: true });
+      return (data || []) as Subtask[];
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "notes"] }),
-    onSuccess: () => setNewNote(""),
+    enabled: isOpen,
   });
 
-  const deleteNoteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await supabase.from("task_notes").delete().eq("id", id);
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "notes"] }),
-  });
+  // No longer using indvidual notes, but keeping the mutation if needed for other things. For now we update description.
+  const updateDescription = (content: string) => {
+    setEditedNote(content);
+    updateTaskMutation.mutate({ description: content });
+  };
 
   // Transcription Logic
   useEffect(() => {
@@ -178,16 +214,18 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
     try {
       const formData = new FormData();
       formData.append("audio", blob);
+      formData.append("taskTitle", task.title);
+      formData.append("currentContent", editedNote);
 
-      const response = await fetch("/api/transcribe", {
+      const response = await fetch("/api/process-audio", {
         method: "POST",
         body: formData,
       });
 
-      if (!response.ok) throw new Error("Transcription failed");
-      const { text } = await response.json();
+      if (!response.ok) throw new Error("Processing failed");
+      const { updatedMarkdown } = await response.json();
       
-      addNoteMutation.mutate({ content: text, isVoice: true });
+      updateDescription(updatedMarkdown);
     } catch (error) {
       console.error(error);
     } finally {
@@ -200,6 +238,18 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
       stopRecording();
     } else {
       startRecording();
+    }
+  };
+
+  const toggleEditor = () => {
+    if (isEditingNote) {
+      // Closing editor - save immediately if dirty
+      if (editedNote !== (task.description || "")) {
+        updateTaskMutation.mutate({ description: editedNote });
+      }
+      setIsEditingNote(false);
+    } else {
+      setIsEditingNote(true);
     }
   };
 
@@ -300,7 +350,7 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
                 activeTab === "notes" ? "text-primary" : "text-zinc-600 hover:text-zinc-400"
               )}
             >
-              Intelligence Log {notes.length > 0 && `(${notes.length})`}
+              Sticky Note {task.description && "(Active)"}
               {activeTab === "notes" && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
             </button>
             <button 
@@ -318,74 +368,91 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
           {/* Content Area */}
           <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
             {activeTab === "notes" ? (
-              <div className="space-y-6">
-                {/* Add Note Input */}
-                <div className="bg-void border border-border/40 rounded-3xl p-4 focus-within:border-primary/40 transition-all group">
-                  <textarea 
-                    placeholder="Enter strategic insights..."
-                    className="w-full bg-transparent border-none outline-none text-sm text-zinc-300 placeholder:text-zinc-700 resize-none h-20 px-2"
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                  />
-                  <div className="flex justify-between items-center mt-2 pt-2 border-t border-border/10">
+              <div className="flex flex-col h-full space-y-4">
+                <div className="flex justify-between items-center px-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                            {isEditingNote ? <Edit3 size={10} /> : <Eye size={10} />}
+                            {isEditingNote ? "Editor Mode" : "Intelligence Preview"}
+                        </span>
+                        {updateTaskMutation.isPending && (
+                            <span className="text-[9px] font-bold text-primary/50 uppercase tracking-widest flex items-center gap-1 animate-pulse">
+                                <Loader2 size={8} className="animate-spin" /> Syncing...
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={toggleEditor}
+                            className="bg-void border border-border/40 text-zinc-600 hover:text-white px-3 py-1 rounded-lg text-[10px] uppercase font-bold transition-all"
+                        >
+                            {isEditingNote ? "Done Editing" : "Manual Edit"}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex-1 bg-void/30 border border-border/10 rounded-[2rem] p-6 relative overflow-hidden group/editor min-h-[300px]">
+                  {isEditingNote ? (
+                    <textarea 
+                        className="w-full h-full bg-transparent border-none outline-none text-zinc-300 text-sm leading-relaxed resize-none font-mono custom-scrollbar"
+                        value={editedNote}
+                        onChange={(e) => setEditedNote(e.target.value)}
+                        placeholder="Start typing strategic details in Markdown..."
+                    />
+                  ) : (
+                    <div className="prose prose-invert max-w-none prose-sm text-zinc-400">
+                      {editedNote ? (
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {editedNote}
+                        </ReactMarkdown>
+                      ) : (
+                        <div className="h-full flex flex-col items-center justify-center py-20 opacity-30 grayscale pointer-events-none">
+                            <Sparkles size={48} className="mb-4 text-zinc-700" />
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-700">No Intelligence Logged</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* AI Pulse for recording/thinking */}
+                  <AnimatePresence>
+                    {(isRecording || isTranscribing) && (
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-primary/5 backdrop-blur-[2px] flex flex-col items-center justify-center p-8 text-center"
+                      >
+                        <div className="relative">
+                           <div className="w-20 h-20 rounded-full bg-primary/10 animate-ping absolute inset-0" />
+                           <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center relative border border-primary/30">
+                              {isRecording ? <Mic size={32} className="text-primary" /> : <Loader2 size={32} className="text-primary animate-spin" />}
+                           </div>
+                        </div>
+                        <h4 className="mt-8 text-xs font-bold text-primary uppercase tracking-[0.3em]">
+                            {isRecording ? "Listening to Objectives..." : "Agent Processing Protocol..."}
+                        </h4>
+                        <p className="mt-2 text-[10px] text-zinc-600 font-medium max-w-[200px]">
+                            {isRecording ? "Release to process and act on your context." : "Adjusting Markdown content based on context-aware logic."}
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="flex justify-between items-center px-1 pt-4">
                     <button 
                       onClick={handleToggleRecording}
                       className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-                        isRecording ? "bg-rose-500/20 text-rose-500 animate-pulse" : "bg-zinc-900 text-zinc-500 hover:text-primary hover:bg-zinc-800"
+                        "h-14 flex-1 rounded-[1.25rem] border flex items-center justify-center gap-3 transition-all card-shadow",
+                        isRecording ? "bg-rose-500 border-rose-500 text-void scale-95" : "bg-primary border-primary text-void hover:bg-primary/90"
                       )}
                     >
-                      {isRecording ? <Square size={16} /> : <Mic size={16} />}
+                      <Mic size={20} className={isRecording ? "animate-pulse" : ""} />
+                      <span className="text-[11px] font-extrabold uppercase tracking-widest">
+                        {isRecording ? "Stop & Process" : "Start Protocol"}
+                      </span>
                     </button>
-                    <button 
-                      onClick={() => addNoteMutation.mutate({ content: newNote })}
-                      disabled={!newNote.trim() || addNoteMutation.isPending}
-                      className="bg-primary hover:bg-primary/90 text-void px-6 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50"
-                    >
-                      {addNoteMutation.isPending ? "Syncing..." : <>Save Log <ChevronRight size={14} /></>}
-                    </button>
-                  </div>
-                </div>
-
-                {isTranscribing && (
-                    <div className="flex items-center gap-3 px-6 py-4 bg-primary/5 rounded-2xl border border-primary/20 animate-pulse">
-                        <Loader2 size={16} className="text-primary animate-spin" />
-                        <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Decoding Audio Transmission...</span>
-                    </div>
-                )}
-
-                {/* Notes List */}
-                <div className="space-y-4">
-                  {notes.map((note) => (
-                    <div key={note.id} className="group relative bg-surface-lighter border border-border/10 rounded-2xl p-5 hover:border-border/30 transition-all card-shadow">
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                             <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
-                                {new Date(note.created_at).toLocaleDateString()}
-                             </span>
-                             {note.is_voice_transcript && (
-                                <span className="text-[9px] font-bold text-primary/50 uppercase tracking-widest flex items-center gap-1">
-                                    <Mic size={10} /> Voice
-                                </span>
-                             )}
-                          </div>
-                          <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">{note.content}</p>
-                        </div>
-                        <button 
-                          onClick={() => deleteNoteMutation.mutate(note.id)}
-                          className="w-8 h-8 rounded-lg bg-rose-500/5 text-rose-500/20 hover:text-rose-500 hover:bg-rose-500/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {notes.length === 0 && !isLoadingNotes && (
-                    <div className="py-12 text-center text-zinc-700 text-[10px] font-bold uppercase tracking-[0.2em] italic">
-                      No data logs available for this target
-                    </div>
-                  )}
                 </div>
               </div>
             ) : (

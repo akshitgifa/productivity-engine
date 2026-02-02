@@ -14,7 +14,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export default function TasksPage() {
   const [filter, setFilter] = useState("");
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const supabase = createClient();
   const { completeTask } = useTaskFulfillment();
   const queryClient = useQueryClient();
@@ -23,20 +22,40 @@ export default function TasksPage() {
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['tasks', 'active'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('tasks')
         .select(`
-          *, 
-          projects(name, tier),
-          task_notes(content),
-          subtasks(title)
+          id,
+          title,
+          description,
+          project_id,
+          state,
+          due_date,
+          waiting_until,
+          est_duration_minutes,
+          energy_tag,
+          blocked_by_id,
+          recurrence_interval_days,
+          last_touched_at,
+          created_at,
+          projects(name, tier, decay_threshold_days)
         `)
         .eq('state', 'Active')
         .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('[Tasks Query Error]', error);
+      }
+      console.log('[Tasks Raw Data]', data?.map(t => ({ id: t.id, title: t.title, description: t.description })));
+      
       return (data || []).map(mapTaskData);
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0, // Force fresh fetch for debugging
+    refetchOnMount: 'always',
   });
+
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const selectedTask = tasks.find(t => t.id === selectedTaskId);
 
   // 2. Mutations
   const deleteMutation = useMutation<void, Error, string, { previousTasks: any[] | undefined }>({
@@ -101,14 +120,30 @@ export default function TasksPage() {
     }
   });
 
+  const recurrenceMutation = useMutation({
+    mutationFn: async ({ id, days }: { id: string, days: number }) => {
+      await supabase.from('tasks').update({ recurrence_interval_days: days }).eq('id', id);
+    },
+    onMutate: async ({ id, days }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
+      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'active']);
+      queryClient.setQueryData(['tasks', 'active'], (old: any) => 
+        old?.map((t: any) => t.id === id ? { ...t, recurrenceIntervalDays: days } : t)
+      );
+      return { previousTasks };
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+    }
+  });
+
   const filteredTasks = tasks.filter((t: any) => {
     const searchStr = filter.toLowerCase();
     const inTitle = t.title.toLowerCase().includes(searchStr);
     const inProject = t.projectName?.toLowerCase().includes(searchStr);
-    const inNotes = t.task_notes?.some((n: any) => n.content.toLowerCase().includes(searchStr));
-    const inSubtasks = t.subtasks?.some((s: any) => s.title.toLowerCase().includes(searchStr));
+    const inDescription = t.description?.toLowerCase().includes(searchStr);
     
-    return inTitle || inProject || inNotes || inSubtasks;
+    return inTitle || inProject || inDescription;
   });
 
   const handleDelete = (id: string) => {
@@ -123,9 +158,9 @@ export default function TasksPage() {
     if (updateStatusMutation.isPending) return;
     updateStatusMutation.mutate({ id, newState });
   };
-  const handleSetRecurrence = async (id: string, days: number) => {
-    await supabase.from('tasks').update({ recurrence_interval_days: days }).eq('id', id);
-    queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+  const handleSetRecurrence = (id: string, days: number) => {
+    if (recurrenceMutation.isPending) return;
+    recurrenceMutation.mutate({ id, days });
   };
 
   return (
@@ -170,7 +205,7 @@ export default function TasksPage() {
           ) : filteredTasks.map((task: any) => (
             <div 
               key={task.id} 
-              onClick={() => setSelectedTask(task)}
+              onClick={() => setSelectedTaskId(task.id)}
               className="group relative bg-surface border border-transparent rounded-3xl p-6 transition-all card-shadow hover:border-border/30 cursor-pointer"
             >
               <div className="flex justify-between items-start mb-6">
@@ -252,11 +287,12 @@ export default function TasksPage() {
       </section>
 
       <AnimatePresence>
-        {selectedTask && (
+        {selectedTaskId && selectedTask && (
           <TaskDetailModal 
+            key={selectedTaskId}
             task={selectedTask} 
-            isOpen={!!selectedTask} 
-            onClose={() => setSelectedTask(null)} 
+            isOpen={!!selectedTaskId} 
+            onClose={() => setSelectedTaskId(null)} 
           />
         )}
       </AnimatePresence>

@@ -13,6 +13,7 @@ export interface Task {
   durationMinutes: number;
   recurrenceIntervalDays?: number;
   state: 'Active' | 'Waiting' | 'Blocked' | 'Completed' | 'Decayed';
+  description?: string;
 }
 
 export type SessionMode = 'Deep Work' | 'Low Energy' | 'Creative' | 'Admin';
@@ -74,7 +75,8 @@ export function mapTaskData(t: any): Task {
     energyTag: t.energy_tag || "Shallow",
     durationMinutes: t.est_duration_minutes || 30,
     recurrenceIntervalDays: t.recurrence_interval_days,
-    state: t.state || 'Active'
+    state: t.state || 'Active',
+    description: t.description || ""
   };
 }
 

@@ -22,8 +22,6 @@ export default function Home() {
   const { completeTask } = useTaskFulfillment();
   const supabase = createClient();
   const queryClient = useQueryClient();
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-
   // 1. Fetch Active Tasks Query
   const { data: allActive = [], isLoading: isTasksLoading } = useQuery({
     queryKey: ['tasks', 'active'],
@@ -31,16 +29,18 @@ export default function Home() {
       const { data } = await supabase
         .from('tasks')
         .select(`
-          id, title, project_id, due_date, est_duration_minutes, energy_tag,
+          id, title, description, project_id, due_date, est_duration_minutes, energy_tag,
           last_touched_at, recurrence_interval_days,
           projects(name, tier, decay_threshold_days)
         `)
         .eq('state', 'Active');
-      
       return (data || []).map(mapTaskData);
     },
     staleTime: 1000 * 60 * 5, // Keep fresh for 5 mins
   });
+
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const selectedTask = allActive.find(t => t.id === selectedTaskId);
 
   // 2. Fetch Recently Completed Tasks Query
   const { data: completedToday = [] } = useQuery({
@@ -101,13 +101,13 @@ export default function Home() {
     }
   });
 
-  // Realtime Sync
+  // Realtime Sync - Only for critical external triggers if needed. 
+  // Removing broad Task sync to prevent edit-flicker for solo user.
   useEffect(() => {
     const channel = supabase
       .channel('home-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => {
         queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
-        queryClient.invalidateQueries({ queryKey: ['history', 'recent'] });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -159,7 +159,7 @@ export default function Home() {
               focusTasks.map((task, i) => {
                 const isFirst = i === 0;
                 return (
-                  <div key={task.id} className="relative group/card cursor-pointer" onClick={() => setSelectedTask(task as any)}>
+                  <div key={task.id} className="relative group/card cursor-pointer" onClick={() => setSelectedTaskId(task.id)}>
                     <FocusCard
                       title={task.title}
                       project={task.projectName}
@@ -248,11 +248,12 @@ export default function Home() {
       </div>
 
       <AnimatePresence>
-        {selectedTask && (
+        {selectedTaskId && selectedTask && (
           <TaskDetailModal 
+            key={selectedTaskId}
             task={selectedTask} 
-            isOpen={!!selectedTask} 
-            onClose={() => setSelectedTask(null)} 
+            isOpen={!!selectedTaskId} 
+            onClose={() => setSelectedTaskId(null)} 
           />
         )}
       </AnimatePresence>
