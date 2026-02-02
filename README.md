@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Entropy UI | Dynamic Context Engine
 
-## Getting Started
+**Project Status:** Active Beta  
+**Core Concept:** Probabilistic Scheduling & Dynamic Context
 
-First, run the development server:
+> *"In an era of infinite distraction, the greatest luxury is focus."*
+
+Entropy UI is a high-performance productivity engine designed for power users. It treats potential work as living entities that compete for your attention. By modeling work as **Entropy** (the inevitable decay of neglected priorities), the system ensures that nothing critical slips through the cracks while hiding the clutter that doesn't matter *now*.
+
+---
+
+## 1. The Philosophy
+We have moved away from "Industrial Zen" toward a **High-Performance Minimalism**.
+- **Vibe:** Swiss Design meets Modern IDE. Slate, Charcoal, and targeted Primary accents.
+- **Copy:** Professional and functional. No "gaming" or "pilot cockpit" roleplay.
+- **Typography:** Inter for readability, JetBrains Mono for data-dense numeric tracking.
+
+### Key Concepts
+
+#### Projects as "Boats"
+Each project is a persistent entity requiring maintenance:
+- **Tier 1-4:** Prioritization level (1 = Urgent, 4 = Maintenance).
+- **Decay Threshold:** The heartbeat of the system. Defines how often a project needs touching before it "rots."
+- **KPIs:** Track real-world impact metrics, not just "tasks completed."
+
+#### The Syllabus (The "Execution" Algorithm)
+The home screen is a **Syllabus**—a curated list of what to execute *next*, calculated dynamically:
+`Score = (Tier Weight) × (Days Since Last Touch / Decay Threshold) × (Context Multiplier)`
+
+- **Filters:** By Time Available (15m, 30m, 1h) and Energy Mode (Deep Work, Administrative, etc.).
+- **Zero-Delay Sync:** Powered by Supabase Realtime & TanStack Query for instant feedback.
+
+---
+
+## 2. Technical Architecture
+
+### Core Stack
+- **Framework:** Next.js 15+ (App Router)
+- **State/Caching:** TanStack Query (React Query) v5
+- **Database:** Supabase (PostgreSQL + Realtime)
+- **Styling:** Tailwind CSS + Framer Motion
+- **AI:** Google Gemini 2.0 Flash (Multimodal)
+
+### Key Modules
+- **`src/lib/engine.ts`**: The urgency scoring algorithm.
+- **`src/hooks/useTaskFulfillment.ts`**: Centralized logic for task completion, log creation, and project health rejuvenation.
+- **`src/store/userStore.ts`**: Client-side session state (Zustand).
+
+---
+
+## 3. AI & Voice Integration
+The future of productivity is a conversation.
+- **Quick Capture:** "Record, Confirm, Done." Voice dumps are parsed into structured JSON (Project + Duration + Recurrence) by Gemini.
+- **The Prophet:** A planned, fully-featured AI Assistant that acts as a General Manager for your database.
+  - *See [ai_assistant_spec.md](./ai_assistant_spec.md) for full details.*
+
+---
+
+## 4. Getting Started
+
+### Prerequisites
+- Node.js 20+
+- pnpm
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+# Install dependencies
+pnpm install
+
+# Setup Environment
+cp .env.example .env.local
+# Add: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, GEMINI_API_KEY
+
+# Run Development Server
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 5. Deployment
+The app is optimized for Vercel deployment. It also supports PWA installation (Manifest included) for a native-like mobile experience.

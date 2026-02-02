@@ -137,6 +137,8 @@ The backend must calculate a dynamic **Urgency Score** for every active task to 
 
 ### **D. AI Integration (LLM Layer)**
 
+> **Note:** See [ai_assistant_spec.md](./ai_assistant_spec.md) for full Voice & Chat Agent specifications.
+
 * **Input:** Raw Text/Audio Transcript.
 * **Output:** Structured JSON object containing:
 * `Task Name`
