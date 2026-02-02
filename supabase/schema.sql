@@ -45,7 +45,18 @@ create table activity_logs (
   session_mode text
 );
 
+-- Project KPIs (Multi-metric support)
+create table project_kpis (
+  id uuid primary key default uuid_generate_v4(),
+  project_id uuid references projects(id) on delete cascade,
+  name text not null,
+  value numeric default 0,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
 -- Disable Row Level Security (RLS) for Solo Mode
 alter table projects disable row level security;
 alter table tasks disable row level security;
 alter table activity_logs disable row level security;
+alter table project_kpis disable row level security;

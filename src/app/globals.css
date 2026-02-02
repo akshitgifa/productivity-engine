@@ -1,29 +1,34 @@
 @import "tailwindcss";
 
 @theme {
-  --color-void: #09090B;
-  --color-surface: #18181B;
-  --color-border: #27272A;
-  
-  --color-primary: #3B82F6;
-  --color-entropy: #F43F5E;
-  
-  --color-tier-1: #F59E0B;
-  --color-tier-2: #8B5CF6;
-  --color-tier-3: #10B981;
-  --color-tier-4: #71717A;
+  --color-void: #050505;
+  --color-surface: #0f0f12;
+  --color-border: #1e1e24;
 
-  --font-inter: "Inter", sans-serif;
+  /* Modern High-Contrast Accents */
+  --color-primary: #facc15;
+  /* Golden Yellow from Habit Tracker */
+  --color-secondary: #6366f1;
+  /* Precision Indigo */
+  --color-entropy: #ff4d4d;
+
+  --color-tier-1: #fbbf24;
+  --color-tier-2: #818cf8;
+  --color-tier-3: #34d399;
+  --color-tier-4: #52525b;
+
+  --font-inter: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
-  
+
+  --radius-3xl: 24px;
+  --radius-2xl: 16px;
   --radius-xl: 12px;
-  --radius-lg: 8px;
 }
 
 @layer base {
   :root {
-    --background: #09090B;
-    --foreground: #FAFAFA;
+    --background: #050505;
+    --foreground: #f4f4f5;
   }
 
   body {
@@ -31,24 +36,24 @@
     color: var(--foreground);
     font-family: var(--font-inter);
     -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
   }
 }
 
 @layer utilities {
-  .focus-glow {
-    box-shadow: 0 0 15px -3px var(--color-primary);
-    border-color: var(--color-primary);
+  .card-shadow {
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
   }
-  
-  .ghost-effect {
-    opacity: 0.5;
-    filter: saturate(0.5) blur(0.5px);
-    border-style: dashed;
+
+  .focus-precision {
+    box-shadow: 0 0 0 1px var(--color-primary);
   }
-  
+
   .glass {
-    background: rgba(24, 24, 27, 0.7);
-    backdrop-filter: blur(8px);
-    border: 1px solid var(--color-border);
+    background: rgba(10, 10, 12, 0.8);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
+
+  /* Remove overused monospace utilities if they exist */
 }

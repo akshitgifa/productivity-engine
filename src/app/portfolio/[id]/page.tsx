@@ -4,7 +4,11 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Anchor, ArrowLeft, Plus, Settings2, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 import { FocusCard } from "@/components/ui/FocusCard";
+import { KPIManager } from "@/components/portfolio/KPIManager";
+import { useProjectAnalytics } from "@/hooks/useProjectAnalytics";
+import { Clock, TrendingUp, Zap, Brain } from "lucide-react";
 import Link from "next/link";
 
 interface Project {
@@ -12,9 +16,10 @@ interface Project {
   name: string;
   tier: number;
   decay_threshold_days: number;
-  kpi_name: string;
-  kpi_value: number;
   last_touched_at: string;
+  settings?: {
+    enabledMetrics?: string[];
+  };
 }
 
 interface Task {
@@ -33,14 +38,17 @@ export default function ProjectDetailPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"Active" | "Waiting" | "History">("Active");
+  const { metrics, isLoading: isAnalyticsLoading } = useProjectAnalytics(id as string);
 
   // Form state for settings
   const [editForm, setEditForm] = useState({
     name: "",
     tier: 3,
     decay_threshold_days: 15,
-    kpi_name: "KPI",
-    kpi_value: 0
+    settings: {
+      enabledMetrics: ["weekly_intensity", "7d_velocity", "focus_consistency", "deep_work_ratio"]
+    }
   });
 
   useEffect(() => {
@@ -59,8 +67,9 @@ export default function ProjectDetailPage() {
           name: projData.name,
           tier: projData.tier,
           decay_threshold_days: projData.decay_threshold_days,
-          kpi_name: projData.kpi_name || "KPI",
-          kpi_value: projData.kpi_value || 0
+          settings: projData.settings || {
+            enabledMetrics: ["weekly_intensity", "7d_velocity", "focus_consistency", "deep_work_ratio"]
+          }
         });
       }
 
@@ -89,141 +98,272 @@ export default function ProjectDetailPage() {
     }
   };
 
-  if (isLoading) return <div className="p-8 font-mono text-zinc-600 animate-pulse">SYNCHRONIZING_CONTEXT...</div>;
-  if (!project) return <div className="p-8 font-mono text-rose-500">PROJECT_NOT_FOUND</div>;
+  const handleUndo = async (taskId: string) => {
+    // 1. Optimistic update
+    setTasks(tasks.map(t => t.id === taskId ? { ...t, state: 'Active' } : t));
+
+    // 2. Clear activity log & update status
+    try {
+      // DELETE LOGS FIRST
+      await supabase
+        .from('activity_logs')
+        .delete()
+        .eq('task_id', taskId);
+
+      await supabase
+        .from('tasks')
+        .update({ state: 'Active', updated_at: new Date().toISOString() })
+        .eq('id', taskId);
+    } catch (error) {
+      console.error("Undo Error:", error);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    // 1. Optimistic update
+    setTasks(tasks.filter(t => t.id !== taskId));
+
+    // 2. Perform server requests
+    try {
+      // DELETE LOGS FIRST
+      await supabase
+        .from('activity_logs')
+        .delete()
+        .eq('task_id', taskId);
+
+      await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+    } catch (error) {
+      console.error("Delete Error:", error);
+    }
+  };
+
+  if (isLoading) return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-700 animate-pulse">Syncing Matrix...</div>;
+  if (!project) return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-rose-500/50">Entity Not Found</div>;
 
   const tierColor = project.tier === 1 ? "text-tier-1" : project.tier === 2 ? "text-tier-2" : "text-tier-3";
 
   return (
-    <div className="px-6 pt-12 pb-24 max-w-md mx-auto">
-      <header className="mb-8">
-        <Link href="/portfolio" className="flex items-center gap-2 text-zinc-600 hover:text-primary transition-colors mb-6 text-xs font-mono uppercase tracking-widest group">
-          <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
-          Return to Portfolio
+    <div className="px-6 pt-12 pb-32 max-w-md md:max-w-7xl mx-auto">
+      <header className="mb-10">
+        <Link href="/portfolio" className="flex items-center gap-2 text-zinc-600 hover:text-white transition-all mb-8 group">
+          <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+          <span className="text-[10px] font-bold uppercase tracking-widest">Global Portfolio</span>
         </Link>
         
-        <div className="flex items-start justify-between">
+        <div className="flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Anchor size={16} className={tierColor} />
-              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
-                BOAT_ID: {project.id.slice(0, 8)}
+            <div className="flex items-center gap-2 mb-3">
+              <div className={cn("w-2 h-2 rounded-full", tierColor.replace('text-', 'bg-'))} />
+              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em]">
+                Tier_{project.tier}
               </span>
             </div>
-            <h1 className="text-3xl font-medium tracking-tight">{project.name}</h1>
+            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">{project.name}</h1>
           </div>
           <button 
             onClick={() => setIsEditing(!isEditing)}
-            className={`p-2 rounded-lg border transition-all ${isEditing ? 'bg-primary/20 border-primary text-primary' : 'bg-surface border-border text-zinc-600 hover:text-zinc-400'}`}
+            className={cn(
+              "w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-3xl flex items-center justify-center transition-all card-shadow border shrink-0",
+              isEditing ? 'bg-primary border-primary text-void' : 'bg-surface border-border/50 text-zinc-400 hover:text-white'
+            )}
           >
-            <Settings2 size={18} />
+            <Settings2 size={24} />
           </button>
         </div>
       </header>
 
-      {isEditing ? (
-        <section className="bg-surface border border-primary/30 rounded-xl p-6 mb-8 space-y-4 animate-in fade-in slide-in-from-top-4">
-          <h3 className="text-[10px] font-mono text-primary uppercase tracking-[0.2em] mb-4">Cockpit_Settings</h3>
-          
-          <div className="space-y-1">
-            <label className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">Project Name</label>
-            <input 
-              className="w-full bg-void border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary/50"
-              value={editForm.name}
-              onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-            />
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
+        {/* Left Column: Stats & Settings */}
+        <div className="md:col-span-5 lg:col-span-12 xl:col-span-4 space-y-8">
+          {isEditing && (
+            <section className="bg-surface border border-primary/20 rounded-3xl p-8 space-y-6 animate-in fade-in slide-in-from-top-4 card-shadow">
+              <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Configuration</p>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Identify</label>
+                <input 
+                  className="w-full bg-void border border-border/50 rounded-2xl px-4 py-3 text-sm outline-none focus:border-primary/50 transition-all font-medium"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                />
+              </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">Priority Tier</label>
-              <select 
-                className="w-full bg-void border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary/50"
-                value={editForm.tier}
-                onChange={(e) => setEditForm({...editForm, tier: parseInt(e.target.value)})}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Priority</label>
+                  <select 
+                    className="w-full bg-void border border-border/50 rounded-2xl px-4 py-3 text-sm outline-none focus:border-primary/50 transition-all font-medium appearance-none"
+                    value={editForm.tier}
+                    onChange={(e) => setEditForm({...editForm, tier: parseInt(e.target.value)})}
+                  >
+                    <option value={1}>1 - Critical</option>
+                    <option value={2}>2 - Growth</option>
+                    <option value={3}>3 - Maintenance</option>
+                    <option value={4}>4 - Icebox</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Decay</label>
+                  <input 
+                    type="number"
+                    className="w-full bg-void border border-border/50 rounded-2xl px-4 py-3 text-sm outline-none focus:border-primary/50 transition-all font-medium"
+                    value={editForm.decay_threshold_days}
+                    onChange={(e) => setEditForm({...editForm, decay_threshold_days: parseInt(e.target.value)})}
+                  />
+                </div>
+              </div>
+
+              <button 
+                onClick={handleUpdateProject}
+                className="w-full bg-primary text-void font-bold py-4 rounded-2xl text-[11px] uppercase tracking-widest hover:bg-primary/90 transition-all card-shadow mt-6"
               >
-                <option value={1}>1 (Critical)</option>
-                <option value={2}>2 (Growth)</option>
-                <option value={3}>3 (Maintenance)</option>
-                <option value={4}>4 (Icebox)</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">Decay (Days)</label>
-              <input 
-                type="number"
-                className="w-full bg-void border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary/50"
-                value={editForm.decay_threshold_days}
-                onChange={(e) => setEditForm({...editForm, decay_threshold_days: parseInt(e.target.value)})}
-              />
-            </div>
+                Save Protocol Changes
+              </button>
+            </section>
+          )}
+
+          <div className="bg-surface border border-transparent rounded-3xl p-8 w-full card-shadow relative overflow-hidden">
+             <div className="flex justify-between items-center mb-6">
+               <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest block">Vitality State</span>
+               <span className={cn(
+                 "text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-tighter",
+                 (new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days
+                   ? "text-rose-500 bg-rose-500/10"
+                   : "text-emerald-500 bg-emerald-500/10"
+               )}>
+                 { (new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days ? "Maintenance Required" : "Optimal Momentum" }
+               </span>
+             </div>
+             
+             <div className="flex items-baseline gap-4 mb-8">
+               <span className="text-6xl md:text-8xl font-extrabold text-white tracking-tighter leading-none">
+                 {Math.floor((new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24))}
+               </span>
+               <div className="flex flex-col">
+                 <span className="text-base font-bold text-zinc-400 uppercase tracking-widest leading-none mb-1">Days</span>
+                 <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest opacity-50">Inactive Focus</span>
+               </div>
+             </div>
+             
+             <div className="space-y-3">
+                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
+                  <span className="text-zinc-600">Focus Continuity</span>
+                  <span className="text-zinc-400">{Math.min(100, Math.round(((new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24)) / project.decay_threshold_days * 100))}%</span>
+                </div>
+                <div className="h-2.5 w-full bg-void rounded-full overflow-hidden p-[1px] border border-border/20">
+                  <div 
+                    className={cn(
+                      "h-full rounded-full transition-all duration-1000",
+                      (new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days ? "bg-rose-500" : "bg-primary"
+                    )}
+                    style={{ width: `${Math.min(100, ((new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24)) / project.decay_threshold_days * 100)}%` }}
+                  />
+                </div>
+             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">KPI Name</label>
-              <input 
-                className="w-full bg-void border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary/50"
-                value={editForm.kpi_name}
-                onChange={(e) => setEditForm({...editForm, kpi_name: e.target.value})}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[9px] font-mono text-zinc-600 uppercase tracking-widest">KPI Value</label>
-              <input 
-                type="number"
-                className="w-full bg-void border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary/50"
-                value={editForm.kpi_value}
-                onChange={(e) => setEditForm({...editForm, kpi_value: parseFloat(e.target.value)})}
-              />
-            </div>
-          </div>
+          {!isAnalyticsLoading && metrics && (
+            <div className="bg-surface border border-transparent rounded-3xl p-8 card-shadow space-y-8">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Automated Vitals</h3>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-void/50 rounded-2xl border border-border/10">
+                  <div className="flex items-center gap-2 text-zinc-600 mb-2">
+                    <Clock size={12} />
+                    <span className="text-[9px] font-bold uppercase tracking-widest">Intensity</span>
+                  </div>
+                  <span className="text-xl font-extrabold text-white">
+                    {metrics.weeklyAverageMinutes < 60 ? `${metrics.weeklyAverageMinutes}m` : `${(metrics.weeklyAverageMinutes / 60).toFixed(1)}h`}
+                  </span>
+                </div>
+                <div className="p-4 bg-void/50 rounded-2xl border border-border/10">
+                  <div className="flex items-center gap-2 text-zinc-600 mb-2">
+                    <TrendingUp size={12} />
+                    <span className="text-[9px] font-bold uppercase tracking-widest">Velocity</span>
+                  </div>
+                  <span className="text-xl font-extrabold text-white">{metrics.tasksCompletedLast7Days}</span>
+                </div>
+              </div>
 
-          <button 
-            onClick={handleUpdateProject}
-            className="w-full bg-primary text-void font-bold py-3 rounded-lg text-xs font-mono uppercase tracking-widest hover:opacity-90 transition-all mt-4"
-          >
-            Apply Modifications
-          </button>
-        </section>
-      ) : (
-        <div className="grid grid-cols-2 gap-4 mb-8">
-           <div className="bg-surface border border-border rounded-lg p-4">
-             <span className="text-[10px] font-mono text-zinc-600 uppercase block mb-1">{project.kpi_name || 'KPI'}</span>
-             <span className="text-2xl font-mono">{project.kpi_value}</span>
-           </div>
-           <div className="bg-surface border border-border rounded-lg p-4">
-             <span className="text-[10px] font-mono text-zinc-600 uppercase block mb-1">Health State</span>
-             <span className={`text-2xl font-mono ${project.decay_threshold_days > 10 ? 'text-emerald-500' : 'text-rose-500'}`}>Nominal</span>
-           </div>
-        </div>
-      )}
-
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[10px] font-mono text-zinc-600 uppercase tracking-[0.2em]">Project_Backlog</h2>
-          <span className="text-[10px] font-mono text-zinc-700">{tasks.length} Entities</span>
-        </div>
-
-        <div className="space-y-4">
-          {tasks.length > 0 ? (
-            tasks.map(task => (
-              <FocusCard 
-                key={task.id}
-                title={task.title}
-                project={project.name}
-                tier={project.tier as any}
-                duration={`${task.est_duration_minutes}m`}
-                isActive={task.state === 'Active'}
-              />
-            ))
-          ) : (
-            <div className="text-center py-12 border border-dashed border-border rounded-lg text-zinc-600 text-[10px] font-mono uppercase tracking-widest">
-              No task data found for this boat
+              <div className="p-5 bg-void/50 rounded-2xl border border-border/10 space-y-4">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2 text-zinc-600">
+                    <Zap size={14} />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Focus Consistency</span>
+                  </div>
+                  <span className="text-lg font-extrabold text-primary">{metrics.consistencyScore}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-void rounded-full overflow-hidden p-[1px] border border-border/20">
+                  <div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: `${metrics.consistencyScore}%` }} />
+                </div>
+              </div>
             </div>
           )}
         </div>
-      </section>
+
+        {/* Right Column: Key Results & Backlog */}
+        <div className="md:col-span-7 lg:col-span-12 xl:col-span-8 space-y-10">
+          <KPIManager projectId={project.id} />
+
+          <section>
+            <div className="flex items-center justify-between mb-8 px-1">
+              <div className="flex gap-4 p-1 bg-surface/50 rounded-2xl border border-border/30">
+                {(["Active", "Waiting", "History"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={cn(
+                      "px-6 py-2.5 text-[10px] font-bold uppercase tracking-[0.2em] transition-all rounded-xl",
+                      activeTab === tab 
+                        ? "bg-primary text-void card-shadow" 
+                        : "text-zinc-500 hover:text-zinc-300"
+                    )}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+                <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+                  {tasks.filter(t => activeTab === "History" ? t.state === 'Done' : t.state === activeTab).length} Entities
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {tasks.filter(t => activeTab === "History" ? t.state === 'Done' : t.state === activeTab).length > 0 ? (
+                tasks
+                  .filter(t => activeTab === "History" ? t.state === 'Done' : t.state === activeTab)
+                  .map(task => (
+                  <FocusCard 
+                    key={task.id}
+                    title={task.title}
+                    project={project.name}
+                    tier={project.tier as any}
+                    duration={`${task.est_duration_minutes}m`}
+                    isActive={task.state === 'Active'}
+                    onUndo={activeTab === 'History' ? () => handleUndo(task.id) : undefined}
+                    onDelete={activeTab === 'History' ? () => handleDeleteTask(task.id) : undefined}
+                  />
+                ))
+              ) : (
+                <div className="col-span-full text-center py-32 bg-surface/30 border border-dashed border-border/50 rounded-3xl">
+                  <div className="w-16 h-16 bg-void/50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-border">
+                    <Brain className="text-zinc-800" size={32} />
+                  </div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Zero focus fragments in {activeTab} state</p>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

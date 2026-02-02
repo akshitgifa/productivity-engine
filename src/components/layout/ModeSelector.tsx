@@ -33,7 +33,7 @@ export function ModeSelector() {
           >
             <Icon size={16} className={cn(isActive ? m.color : "text-zinc-600")} />
             <span className={cn(
-              "text-[8px] font-mono uppercase tracking-tighter",
+              "text-[8px] font-bold uppercase tracking-widest",
               isActive ? "text-zinc-200" : "text-zinc-600"
             )}>
               {m.label.split(" ")[0]}
