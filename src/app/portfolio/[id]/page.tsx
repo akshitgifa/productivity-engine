@@ -29,19 +29,15 @@ interface Task {
   est_duration_minutes: number;
 }
 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 export default function ProjectDetailPage() {
   const { id } = useParams();
   const router = useRouter();
   const supabase = createClient();
+  const queryClient = useQueryClient();
   
-  const [project, setProject] = useState<Project | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"Active" | "Waiting" | "History">("Active");
-  const { metrics, isLoading: isAnalyticsLoading } = useProjectAnalytics(id as string);
-
-  // Form state for settings
   const [editForm, setEditForm] = useState({
     name: "",
     tier: 3,
@@ -50,61 +46,53 @@ export default function ProjectDetailPage() {
       enabledMetrics: ["weekly_intensity", "7d_velocity", "focus_consistency", "deep_work_ratio"]
     }
   });
+  const [activeTab, setActiveTab] = useState<"Active" | "Waiting" | "History">("Active");
+  const { metrics, isLoading: isAnalyticsLoading } = useProjectAnalytics(id as string);
 
-  useEffect(() => {
-    async function fetchData() {
-      if (!id) return;
-
-      const { data: projData } = await supabase
+  // 1. Fetch Project Query
+  const { data: project, isLoading: isProjectLoading } = useQuery<Project>({
+    queryKey: ['projects', id],
+    queryFn: async () => {
+      const { data } = await supabase
         .from('projects')
         .select('*')
         .eq('id', id)
         .single();
-      
-      if (projData) {
-        setProject(projData);
-        setEditForm({
-          name: projData.name,
-          tier: projData.tier,
-          decay_threshold_days: projData.decay_threshold_days,
-          settings: projData.settings || {
-            enabledMetrics: ["weekly_intensity", "7d_velocity", "focus_consistency", "deep_work_ratio"]
-          }
-        });
-      }
+      return data as Project;
+    },
+    enabled: !!id
+  });
 
-      const { data: taskData } = await supabase
+  // 2. Fetch Project Tasks Query
+  const { data: tasks = [], isLoading: isTasksLoading } = useQuery<Task[]>({
+    queryKey: ['tasks', 'project', id],
+    queryFn: async () => {
+      const { data } = await supabase
         .from('tasks')
         .select('*')
         .eq('project_id', id)
         .order('created_at', { ascending: false });
-      
-      if (taskData) setTasks(taskData);
-      setIsLoading(false);
+      return data || [];
+    },
+    enabled: !!id
+  });
+
+  useEffect(() => {
+    if (project) {
+      setEditForm({
+        name: project.name,
+        tier: project.tier,
+        decay_threshold_days: project.decay_threshold_days,
+        settings: project.settings || {
+          enabledMetrics: ["weekly_intensity", "7d_velocity", "focus_consistency", "deep_work_ratio"]
+        } as any
+      });
     }
+  }, [project]);
 
-    fetchData();
-  }, [id, supabase]);
-
-  const handleUpdateProject = async () => {
-    const { error } = await supabase
-      .from('projects')
-      .update(editForm)
-      .eq('id', id);
-    
-    if (!error) {
-      setProject({ ...project!, ...editForm });
-      setIsEditing(false);
-    }
-  };
-
-  const handleUndo = async (taskId: string) => {
-    // 1. Optimistic update
-    setTasks(tasks.map(t => t.id === taskId ? { ...t, state: 'Active' } : t));
-
-    // 2. Clear activity log & update status
-    try {
-      // DELETE LOGS FIRST
+  // 3. Mutations
+  const undoMutation = useMutation<void, Error, string>({
+    mutationFn: async (taskId) => {
       await supabase
         .from('activity_logs')
         .delete()
@@ -114,18 +102,24 @@ export default function ProjectDetailPage() {
         .from('tasks')
         .update({ state: 'Active', updated_at: new Date().toISOString() })
         .eq('id', taskId);
-    } catch (error) {
-      console.error("Undo Error:", error);
+    },
+    onMutate: async (taskId) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'project', id] });
+      const previous = queryClient.getQueryData<Task[]>(['tasks', 'project', id]);
+      queryClient.setQueryData(['tasks', 'project', id], (old: Task[] | undefined) => 
+        old?.map((t: Task) => t.id === taskId ? { ...t, state: 'Active' } : t)
+      );
+      return { previous };
+    },
+    onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks', 'project', id] });
+        queryClient.invalidateQueries({ queryKey: ['history'] });
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
     }
-  };
+  });
 
-  const handleDeleteTask = async (taskId: string) => {
-    // 1. Optimistic update
-    setTasks(tasks.filter(t => t.id !== taskId));
-
-    // 2. Perform server requests
-    try {
-      // DELETE LOGS FIRST
+  const deleteTaskMutation = useMutation<void, Error, string>({
+    mutationFn: async (taskId) => {
       await supabase
         .from('activity_logs')
         .delete()
@@ -135,10 +129,36 @@ export default function ProjectDetailPage() {
         .from('tasks')
         .delete()
         .eq('id', taskId);
-    } catch (error) {
-      console.error("Delete Error:", error);
+    },
+    onMutate: async (taskId) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'project', id] });
+      const previous = queryClient.getQueryData<Task[]>(['tasks', 'project', id]);
+      queryClient.setQueryData(['tasks', 'project', id], (old: Task[] | undefined) => 
+        old?.filter((t: Task) => t.id !== taskId)
+      );
+      return { previous };
+    },
+    onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks', 'project', id] });
+    }
+  });
+
+  const handleUpdateProject = async () => {
+    const { error } = await supabase
+      .from('projects')
+      .update(editForm)
+      .eq('id', id);
+    
+    if (!error) {
+      queryClient.invalidateQueries({ queryKey: ['projects', id] });
+      setIsEditing(false);
     }
   };
+
+  const handleUndo = (taskId: string) => undoMutation.mutate(taskId);
+  const handleDeleteTask = (taskId: string) => deleteTaskMutation.mutate(taskId);
+
+  const isLoading = isProjectLoading || isTasksLoading;
 
   if (isLoading) return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-700 animate-pulse">Syncing Matrix...</div>;
   if (!project) return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-rose-500/50">Entity Not Found</div>;

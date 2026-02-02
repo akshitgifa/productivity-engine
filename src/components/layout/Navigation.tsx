@@ -14,8 +14,41 @@ const NAV_ITEMS = [
   { label: "Analytics", href: "/review", icon: BarChart3 },
 ];
 
+import { useQueryClient } from "@tanstack/react-query";
+
 export function Navigation() {
   const pathname = usePathname();
+  const queryClient = useQueryClient();
+  const supabase = createClient();
+
+  const handlePrefetch = (href: string) => {
+    if (href === "/history") {
+      queryClient.prefetchQuery({
+        queryKey: ['history'],
+        queryFn: async () => {
+          const { data } = await supabase.from('tasks').select('*, projects(name)').eq('state', 'Done').order('updated_at', { ascending: false });
+          return data || [];
+        }
+      });
+    } else if (href === "/portfolio") {
+      queryClient.prefetchQuery({
+        queryKey: ['projects'],
+        queryFn: async () => {
+          const { data } = await supabase.from('projects').select('*').order('tier', { ascending: true });
+          return data || [];
+        }
+      });
+    } else if (href === "/") {
+      queryClient.prefetchQuery({
+        queryKey: ['tasks', 'active'],
+        queryFn: async () => {
+          const { data } = await supabase.from('tasks').select('*, projects(name, tier)').eq('state', 'Active').order('created_at', { ascending: false });
+          return data || [];
+        }
+      });
+    }
+    // Analytics is slightly more complex, but we can pre-fetch it too if needed
+  };
 
   return (
     <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-sm w-[90%] glass rounded-3xl p-1.5 card-shadow">
@@ -28,6 +61,7 @@ export function Navigation() {
             <Link
               key={item.href}
               href={item.href}
+              onMouseEnter={() => handlePrefetch(item.href)}
               className={cn(
                 "flex flex-col items-center gap-1.5 px-4 py-2 rounded-2xl transition-all duration-300",
                 isActive ? "text-primary bg-primary/10" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"

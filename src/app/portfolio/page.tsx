@@ -14,23 +14,21 @@ interface Project {
   decay_threshold_days: number;
 }
 
+import { useQuery } from "@tanstack/react-query";
+
 export default function PortfolioPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const supabase = createClient();
 
-  useEffect(() => {
-    async function fetchProjects() {
+  const { data: projects = [], isLoading } = useQuery<Project[]>({
+    queryKey: ['projects'],
+    queryFn: async () => {
       const { data } = await supabase
         .from('projects')
         .select('*')
         .order('tier', { ascending: true });
-      
-      if (data) setProjects(data);
-      setIsLoading(false);
+      return data || [];
     }
-    fetchProjects();
-  }, [supabase]);
+  });
 
   const calculateHealth = (lastTouched: string, threshold: number) => {
     const diff = new Date().getTime() - new Date(lastTouched).getTime();

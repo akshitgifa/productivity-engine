@@ -1,28 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { FocusCard } from "@/components/ui/FocusCard";
 import { ModeSelector } from "@/components/layout/ModeSelector";
 import { TimeAvailableSelector } from "@/components/layout/TimeAvailableSelector";
 import { useUserStore } from "@/store/userStore";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
-import { CheckCircle2, History as HistoryIcon, Clock, ChevronRight } from "lucide-react";
+import { CheckCircle2, Clock } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
-import { sortTasksByUrgency, filterAdminTasks, Task } from "@/lib/engine";
+import { sortTasksByUrgency, filterAdminTasks } from "@/lib/engine";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export default function Home() {
   const { mode, timeAvailable } = useUserStore();
   const { completeTask } = useTaskFulfillment();
-  const [focusTasks, setFocusTasks] = useState<any[]>([]);
-  const [adminTasks, setAdminTasks] = useState<any[]>([]);
-  const [completedToday, setCompletedToday] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const supabase = createClient();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    async function fetchTasks() {
+  // 1. Fetch Active Tasks Query
+  const { data: allActive = [], isLoading: isTasksLoading } = useQuery({
+    queryKey: ['tasks', 'active'],
+    queryFn: async () => {
       const { data } = await supabase
         .from('tasks')
         .select(`
@@ -33,57 +33,112 @@ export default function Home() {
           est_duration_minutes, 
           energy_tag,
           last_touched_at,
+          recurrence_interval_days,
           projects(name, tier, decay_threshold_days)
         `)
         .eq('state', 'Active');
+      
+      return (data || []).map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        projectId: t.project_id,
+        projectName: t.projects?.name || "Orbit",
+        projectTier: t.projects?.tier || 3,
+        lastTouchedAt: new Date(t.last_touched_at),
+        decayThresholdDays: t.projects?.decay_threshold_days || 15,
+        dueDate: t.due_date ? new Date(t.due_date) : undefined,
+        energyTag: t.energy_tag,
+        durationMinutes: t.est_duration_minutes || 30,
+        recurrenceIntervalDays: t.recurrence_interval_days
+      }));
+    }
+  });
 
-      if (data) {
-        const transformedTasks: Task[] = data.map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          projectId: t.project_id, // Keep the UUID
-          projectName: t.projects?.name || "Orbit",
-          projectTier: t.projects?.tier || 3,
-          lastTouchedAt: new Date(t.last_touched_at),
-          decayThresholdDays: t.projects?.decay_threshold_days || 15,
-          dueDate: t.due_date ? new Date(t.due_date) : undefined,
-          energyTag: t.energy_tag,
-          durationMinutes: t.est_duration_minutes || 30,
-          recurrenceIntervalDays: t.recurrence_interval_days
-        }));
-
-        // Filter by Time Available
-        let constrainedTasks = transformedTasks;
-        if (timeAvailable) {
-          constrainedTasks = transformedTasks.filter(t => t.durationMinutes <= timeAvailable);
-        }
-
-        const sorted = sortTasksByUrgency(constrainedTasks, mode);
-        const { focus, admin } = filterAdminTasks(sorted);
-        setFocusTasks(focus);
-        setAdminTasks(admin);
-      }
-
-      // Fetch recently completed tasks (last 3)
-      const { data: completedData } = await supabase
+  // 2. Fetch Recently Completed Tasks Query
+  const { data: completedToday = [] } = useQuery({
+    queryKey: ['history', 'recent'],
+    queryFn: async () => {
+      const { data } = await supabase
         .from('tasks')
         .select('*, projects(name)')
         .eq('state', 'Done')
         .order('updated_at', { ascending: false })
         .limit(3);
-      
-      if (completedData) setCompletedToday(completedData);
-      
-      setIsLoading(false);
+      return data || [];
     }
+  });
 
-    fetchTasks();
-  }, [mode, timeAvailable, supabase]);
+  // 3. Complete Task Mutation
+  const completeMutation = useMutation({
+    mutationFn: async (task: any) => {
+      await completeTask({
+        id: task.id,
+        title: task.title,
+        projectId: task.projectId,
+        durationMinutes: task.durationMinutes,
+        recurrenceIntervalDays: task.recurrenceIntervalDays,
+        energyTag: task.energyTag
+      });
+    },
+    onMutate: async (task: any) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
+      await queryClient.cancelQueries({ queryKey: ['history', 'recent'] });
+
+      const previousActive = queryClient.getQueryData<any[]>(['tasks', 'active']);
+      const previousRecent = queryClient.getQueryData<any[]>(['history', 'recent']);
+
+      queryClient.setQueryData(['tasks', 'active'], (old: any) => old?.filter((t: any) => t.id !== task.id));
+      
+      queryClient.setQueryData(['history', 'recent'], (old: any) => {
+        const newItem = {
+          id: task.id,
+          title: task.title,
+          est_duration_minutes: task.durationMinutes,
+          projects: { name: task.projectName }
+        };
+        const filtered = (old || []).filter((t: any) => t.id !== task.id);
+        return [newItem, ...filtered].slice(0, 3);
+      });
+
+      return { previousActive, previousRecent };
+    },
+    onError: (err, task, context) => {
+      queryClient.setQueryData(['tasks', 'active'], context?.previousActive);
+      queryClient.setQueryData(['history', 'recent'], context?.previousRecent);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['history'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    }
+  });
+
+  // Realtime Sync
+  useEffect(() => {
+    const channel = supabase
+      .channel('home-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+        queryClient.invalidateQueries({ queryKey: ['history', 'recent'] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [supabase, queryClient]);
+
+  // Filter & Logic
+  let constrainedTasks = allActive;
+  if (timeAvailable) {
+    constrainedTasks = allActive.filter(t => t.durationMinutes <= timeAvailable);
+  }
+
+  const sorted = sortTasksByUrgency(constrainedTasks, mode);
+  const { focus: focusTasks, admin: adminTasks } = filterAdminTasks(sorted);
+  const isLoading = isTasksLoading;
 
   return (
     <div className="px-6 pt-12 pb-32 max-w-md md:max-w-6xl mx-auto">
       <header className="mb-10">
-        <div className="flex items-center justify-between items-end mb-4">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-1">Intelligence</p>
             <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
@@ -126,33 +181,11 @@ export default function Home() {
                     />
                     {isFirst && (
                       <button 
-                        onClick={async () => {
-                          // Optimistic Update
-                          const currentTask = task;
-                          setFocusTasks(prev => prev.filter(t => t.id !== currentTask.id));
-                          setCompletedToday(prev => [{
-                            id: currentTask.id,
-                            title: currentTask.title,
-                            est_duration_minutes: currentTask.durationMinutes,
-                            projects: { name: currentTask.projectName }
-                          }, ...prev].slice(0, 3));
-
-                          try {
-                            await completeTask({
-                              id: currentTask.id,
-                              title: currentTask.title,
-                              projectId: currentTask.projectId,
-                              durationMinutes: currentTask.durationMinutes,
-                              recurrenceIntervalDays: currentTask.recurrenceIntervalDays,
-                              energyTag: currentTask.energyTag
-                            });
-                          } catch (error) {
-                            console.error("Failed to complete task:", error);
-                          }
-                        }}
-                        className="absolute right-5 bottom-5 bg-primary hover:bg-primary/90 text-void px-6 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all card-shadow active:scale-95"
+                        onClick={() => completeMutation.mutate(task)}
+                        disabled={completeMutation.isPending}
+                        className="absolute right-5 bottom-5 bg-primary hover:bg-primary/90 text-void px-6 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all card-shadow active:scale-95 disabled:opacity-50"
                       >
-                        Done
+                        {completeMutation.isPending ? "..." : "Done"}
                       </button>
                     )}
                   </div>
@@ -167,7 +200,6 @@ export default function Home() {
         </div>
 
         <div className="md:col-span-5 lg:col-span-4 space-y-8">
-          {/* Recently Completed Momentum */}
           {completedToday.length > 0 && (
             <section>
               <div className="flex items-center justify-between mb-6">
@@ -179,7 +211,7 @@ export default function Home() {
                 </Link>
               </div>
               <div className="space-y-3">
-                {completedToday.map(task => (
+                {completedToday.map((task: any) => (
                   <div key={task.id} className="bg-surface/50 border border-transparent rounded-2xl p-4 flex items-center justify-between group card-shadow hover:border-border/30 transition-all">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
@@ -197,7 +229,6 @@ export default function Home() {
             </section>
           )}
 
-          {/* Admin Tasks Batch */}
           <Link 
             href="/tasks"
             className={cn(

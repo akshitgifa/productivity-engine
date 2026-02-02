@@ -6,36 +6,48 @@ import { Search, Filter, Trash2, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<any[]>([]);
   const [filter, setFilter] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
   const supabase = createClient();
   const { completeTask } = useTaskFulfillment();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchTasks();
-  }, []);
+  // 1. Fetch Tasks Query
+  const { data: tasks = [], isLoading } = useQuery({
+    queryKey: ['tasks', 'active'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('tasks')
+        .select('*, projects(name, tier)')
+        .eq('state', 'Active')
+        .order('created_at', { ascending: false });
+      return data || [];
+    }
+  });
 
-  async function fetchTasks() {
-    const { data } = await supabase
-      .from('tasks')
-      .select('*, projects(name, tier)')
-      .eq('state', 'Active')
-      .order('created_at', { ascending: false });
-    
-    if (data) setTasks(data);
-    setIsLoading(false);
-  }
+  // 2. Mutations
+  const deleteMutation = useMutation<void, Error, string, { previousTasks: any[] | undefined }>({
+    mutationFn: async (id: string) => {
+      await supabase.from('tasks').delete().eq('id', id);
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
+      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'active']);
+      queryClient.setQueryData(['tasks', 'active'], (old: any) => old?.filter((t: any) => t.id !== id));
+      return { previousTasks };
+    },
+    onError: (err, id, context) => {
+      queryClient.setQueryData(['tasks', 'active'], context?.previousTasks);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+    }
+  });
 
-  const handleDelete = async (id: string) => {
-    setTasks(tasks.filter(t => t.id !== id));
-    await supabase.from('tasks').delete().eq('id', id);
-  };
-
-  const handleComplete = async (task: any) => {
-    setTasks(tasks.filter(t => t.id !== task.id));
-    try {
+  const completeMutation = useMutation<void, Error, any, { previousTasks: any[] | undefined }>({
+    mutationFn: async (task: any) => {
       await completeTask({
         id: task.id,
         title: task.title,
@@ -44,26 +56,52 @@ export default function TasksPage() {
         recurrenceIntervalDays: task.recurrence_interval_days,
         energyTag: task.energy_tag
       });
-    } catch (error) {
-      console.error("Fulfillment Error:", error);
-      fetchTasks(); // Rollback on error
+    },
+    onMutate: async (task) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
+      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'active']);
+      queryClient.setQueryData(['tasks', 'active'], (old: any) => old?.filter((t: any) => t.id !== task.id));
+      return { previousTasks };
+    },
+    onError: (err, task, context) => {
+      queryClient.setQueryData(['tasks', 'active'], context?.previousTasks);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['history'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
     }
-  };
+  });
 
-  const handleUpdateStatus = async (id: string, newState: string) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, state: newState } : t));
-    await supabase.from('tasks').update({ state: newState }).eq('id', id);
-  };
+  const updateStatusMutation = useMutation<void, Error, { id: string, newState: string }, { previousTasks: any[] | undefined }>({
+    mutationFn: async ({ id, newState }) => {
+      await supabase.from('tasks').update({ state: newState }).eq('id', id);
+    },
+    onMutate: async ({ id, newState }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
+      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'active']);
+      queryClient.setQueryData(['tasks', 'active'], (old: any) => 
+        old?.map((t: any) => t.id === id ? { ...t, state: newState } : t)
+      );
+      return { previousTasks };
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+    }
+  });
 
-  const handleSetRecurrence = async (id: string, days: number) => {
-    setTasks(tasks.map(t => t.id === id ? { ...t, recurrence_interval_days: days } : t));
-    await supabase.from('tasks').update({ recurrence_interval_days: days }).eq('id', id);
-  };
-
-  const filteredTasks = tasks.filter(t => 
+  const filteredTasks = tasks.filter((t: any) => 
     t.title.toLowerCase().includes(filter.toLowerCase()) || 
     t.projects?.name?.toLowerCase().includes(filter.toLowerCase())
   );
+
+  const handleDelete = (id: string) => deleteMutation.mutate(id);
+  const handleComplete = (task: any) => completeMutation.mutate(task);
+  const handleUpdateStatus = (id: string, newState: string) => updateStatusMutation.mutate({ id, newState });
+  const handleSetRecurrence = async (id: string, days: number) => {
+    await supabase.from('tasks').update({ recurrence_interval_days: days }).eq('id', id);
+    queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+  };
 
   return (
     <div className="px-6 pt-12 pb-32 max-w-md md:max-w-6xl mx-auto">

@@ -9,13 +9,12 @@ interface QuickCaptureDrawerProps {
   onClose: () => void;
 }
 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase";
 
 export function QuickCaptureDrawer({ isOpen, onClose }: QuickCaptureDrawerProps) {
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [projects, setProjects] = useState<{id: string, name: string}[]>([]);
   const [parsedResult, setParsedResult] = useState<{
     task: string;
     project: string;
@@ -25,17 +24,93 @@ export function QuickCaptureDrawer({ isOpen, onClose }: QuickCaptureDrawerProps)
   } | null>(null);
 
   const supabase = createClient();
+  const queryClient = useQueryClient();
 
-  // Fetch projects when drawer opens
-  React.useEffect(() => {
-    if (isOpen) {
-      const fetchProjects = async () => {
-        const { data } = await supabase.from('projects').select('id, name');
-        if (data) setProjects(data);
-      };
-      fetchProjects();
+  // 1. Fetch Projects Query
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async () => {
+      const { data } = await supabase.from('projects').select('id, name');
+      return data || [];
+    },
+    enabled: isOpen
+  });
+
+  // 2. Add Task Mutation
+  const addTaskMutation = useMutation({
+    mutationFn: async (result: typeof parsedResult) => {
+      if (!result) return;
+      let finalProjectId = result.projectId;
+
+      // If no projectId but project name exists, create it
+      if (!finalProjectId && result.project && result.project !== "None") {
+        const { data: existingProj } = await supabase
+          .from('projects')
+          .select('id')
+          .eq('name', result.project)
+          .maybeSingle();
+
+        if (existingProj) {
+          finalProjectId = existingProj.id;
+        } else {
+          const { data: newProj, error: projError } = await supabase
+            .from('projects')
+            .insert({ name: result.project, tier: 3 })
+            .select()
+            .single();
+          
+          if (projError) throw projError;
+          finalProjectId = newProj?.id;
+          queryClient.invalidateQueries({ queryKey: ['projects'] });
+        }
+      }
+
+      const { error: taskError } = await supabase.from('tasks').insert({
+        title: result.task,
+        project_id: finalProjectId || null,
+        est_duration_minutes: parseInt(result.duration) || 30,
+        energy_tag: result.energy || 'Shallow',
+        state: 'Active'
+      });
+
+      if (taskError) throw taskError;
+    },
+    onMutate: async (newResult) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
+      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'active']);
+      
+      // Optimistic insert
+      if (previousTasks && newResult) {
+        const optimisticTask = {
+          id: Math.random().toString(),
+          title: newResult.task,
+          project_id: newResult.projectId,
+          est_duration_minutes: parseInt(newResult.duration) || 30,
+          energy_tag: newResult.energy || 'Shallow',
+          state: 'Active',
+          created_at: new Date().toISOString(),
+          projects: { name: newResult.project }
+        };
+        queryClient.setQueryData(['tasks', 'active'], [optimisticTask, ...previousTasks]);
+      }
+      
+      return { previousTasks };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(['tasks', 'active'], context.previousTasks);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+    },
+    onSuccess: () => {
+      onClose();
+      setParsedResult(null);
+      setInput("");
     }
-  }, [isOpen, supabase]);
+  });
 
   const handleProcess = async () => {
     if (!input) return;
@@ -51,9 +126,7 @@ export function QuickCaptureDrawer({ isOpen, onClose }: QuickCaptureDrawerProps)
       if (!response.ok) throw new Error("Parsing failed");
       
       const data = await response.json();
-      
-      // Try to find a matching project among existing ones
-      const matchingProject = projects.find(p => p.name.toLowerCase() === data.project?.toLowerCase());
+      const matchingProject = projects.find((p: any) => p.name.toLowerCase() === data.project?.toLowerCase());
 
       setParsedResult({
         task: data.task,
@@ -75,61 +148,8 @@ export function QuickCaptureDrawer({ isOpen, onClose }: QuickCaptureDrawerProps)
     }
   };
 
-  const handleConfirm = async () => {
-    if (!parsedResult) return;
-    setIsSaving(true);
-    
-    try {
-      let finalProjectId = parsedResult.projectId;
-
-      // If no projectId but project name exists, create it or handle "none"
-      if (!finalProjectId && parsedResult.project && parsedResult.project !== "None") {
-        // Double check for race condition match by name
-        const { data: existingProj } = await supabase
-          .from('projects')
-          .select('id')
-          .eq('name', parsedResult.project)
-          .maybeSingle();
-
-        if (existingProj) {
-          finalProjectId = existingProj.id;
-        } else {
-          const { data: newProj, error: projError } = await supabase
-            .from('projects')
-            .insert({ 
-              name: parsedResult.project, 
-              tier: 3
-            })
-            .select()
-            .single();
-          
-          if (projError) throw projError;
-          finalProjectId = newProj?.id;
-        }
-      }
-
-      const { error: taskError } = await supabase.from('tasks').insert({
-        title: parsedResult.task,
-        project_id: finalProjectId || null,
-        est_duration_minutes: parseInt(parsedResult.duration) || 30,
-        energy_tag: parsedResult.energy || 'Shallow',
-        state: 'Active'
-      });
-
-      if (taskError) throw taskError;
-
-      onClose();
-      setParsedResult(null);
-      setInput("");
-      // Force refresh data in dashboard
-      window.location.reload(); 
-    } catch (error) {
-      console.error("Save Error:", error);
-      alert("Failed to save task. Check console for details.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  const handleConfirm = () => addTaskMutation.mutate(parsedResult);
+  const isSaving = addTaskMutation.isPending;
 
   if (!isOpen) return null;
 

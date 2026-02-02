@@ -15,13 +15,15 @@ interface CompletedTask {
   est_duration_minutes: number;
 }
 
-export default function HistoryPage() {
-  const [tasks, setTasks] = useState<CompletedTask[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const supabase = createClient();
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-  useEffect(() => {
-    async function fetchHistory() {
+export default function HistoryPage() {
+  const supabase = createClient();
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['history'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('tasks')
         .select(`
@@ -35,60 +37,93 @@ export default function HistoryPage() {
         .eq('state', 'Done')
         .order('updated_at', { ascending: false });
 
-      if (data) {
-        setTasks(data.map((t: any) => ({
-          ...t,
-          project_name: t.projects?.name || 'Orbit'
-        })));
+      if (error) {
+        console.error("Error fetching history:", error);
+        throw new Error(error.message);
       }
-      setIsLoading(false);
+
+      return data?.map((t: any) => ({
+        ...t,
+        project_name: t.projects?.name || 'Orbit'
+      })) || [];
     }
-    fetchHistory();
-  }, [supabase]);
+  });
 
-  const handleUndo = async (taskId: string) => {
-    // 1. Optimistic update
-    setTasks(tasks.filter(t => t.id !== taskId));
+  const tasks: CompletedTask[] = data || [];
 
-    // 2. Perform server requests
-    try {
-      // DELETE LOGS FIRST while task_id still exists
+  const undoMutation = useMutation<void, Error, string, { previous: CompletedTask[] | undefined }>({
+    mutationFn: async (taskId) => {
       await supabase
         .from('activity_logs')
         .delete()
         .eq('task_id', taskId);
 
-      // THEN update task status
       await supabase
         .from('tasks')
         .update({ state: 'Active', updated_at: new Date().toISOString() })
         .eq('id', taskId);
-    } catch (error) {
-      console.error("Undo Error:", error);
+    },
+    onMutate: async (taskId) => {
+      await queryClient.cancelQueries({ queryKey: ['history'] });
+      const previous = queryClient.getQueryData<CompletedTask[]>(['history']);
+      queryClient.setQueryData(['history'], (old: CompletedTask[] | undefined) => old?.filter((t: CompletedTask) => t.id !== taskId));
+      return { previous };
+    },
+    onError: (err, id, context) => {
+      queryClient.setQueryData(['history'], context?.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['history'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
     }
-  };
+  });
 
-  const handleDelete = async (taskId: string) => {
-    // 1. Optimistic update
-    setTasks(tasks.filter(t => t.id !== taskId));
-
-    // 2. Perform server request
-    try {
-      // DELETE LOGS FIRST
+  const deleteMutation = useMutation<void, Error, string, { previous: CompletedTask[] | undefined }>({
+    mutationFn: async (taskId) => {
       await supabase
         .from('activity_logs')
         .delete()
         .eq('task_id', taskId);
 
-      // THEN delete the task
       await supabase
         .from('tasks')
         .delete()
         .eq('id', taskId);
-    } catch (error) {
-      console.error("Delete Error:", error);
+    },
+    onMutate: async (taskId) => {
+      await queryClient.cancelQueries({ queryKey: ['history'] });
+      const previous = queryClient.getQueryData<CompletedTask[]>(['history']);
+      queryClient.setQueryData(['history'], (old: CompletedTask[] | undefined) => old?.filter((t: CompletedTask) => t.id !== taskId));
+      return { previous };
+    },
+    onError: (err, id, context) => {
+      queryClient.setQueryData(['history'], context?.previous);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['history'] });
     }
-  };
+  });
+
+  const handleUndo = (id: string) => undoMutation.mutate(id);
+  const handleDelete = (id: string) => deleteMutation.mutate(id);
+
+  // Realtime subscription for instant updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('history-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['history'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, queryClient]);
 
   return (
     <div className="px-6 pt-12 pb-32 max-w-md md:max-w-6xl mx-auto">

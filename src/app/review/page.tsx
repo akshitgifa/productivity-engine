@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { TrendingUp, BarChart, Clock, AlertTriangle, Hourglass } from "lucide-react";
 import { createClient } from "@/lib/supabase";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface ActivityLog {
   completed_at: string;
@@ -18,17 +19,25 @@ interface StagnantTask {
 
 export default function ReviewPage() {
   const supabase = createClient();
-  const [stats, setStats] = useState({
-    efficiency: 0,
-    deepWorkHours: 0,
-    dailyActivity: [0, 0, 0, 0, 0, 0, 0],
-    stagnantTasks: [] as StagnantTask[],
-    waitingTasks: [] as any[]
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
+  // Realtime subscription for instant updates
   useEffect(() => {
-    async function fetchAnalytics() {
+    const channel = supabase
+      .channel('analytics-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, queryClient]);
+
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ['analytics'],
+    queryFn: async () => {
       const now = new Date();
       const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
@@ -44,64 +53,58 @@ export default function ReviewPage() {
         .select('*, projects(name)')
         .in('state', ['Active', 'Waiting']);
 
-      if (logs) {
-        // Calculate daily counts for the chart
-        const dailyCounts = [0, 0, 0, 0, 0, 0, 0];
-        let totalMinutes = 0;
+      const dailyCounts = [0, 0, 0, 0, 0, 0, 0];
+      let totalMinutes = 0;
 
-        logs.forEach(log => {
+      if (logs) {
+        logs.forEach((log: any) => {
           const dayIndex = new Date(log.completed_at).getDay();
           dailyCounts[dayIndex]++;
           totalMinutes += log.duration_minutes || 0;
         });
-
-        // Shift daily counts so today is the last element
-        const todayIndex = now.getDay();
-        const reorderedCounts = [];
-        for (let i = 0; i < 7; i++) {
-          reorderedCounts.push(dailyCounts[(todayIndex - 6 + i + 7) % 7]);
-        }
-
-        // Calculate Focus Efficiency (Simulated for now based on completed vs total attempted)
-        const completedCount = logs.length;
-        const activeCount = tasks?.filter(t => t.state === 'Active').length || 0;
-        const efficiency = activeCount + completedCount > 0 
-          ? Math.round((completedCount / (activeCount + completedCount)) * 100) 
-          : 0;
-
-        // 3. Identify Stagnant Tasks (> 14 days idle or created)
-        const stagnant = (tasks || [])
-          .map(t => {
-            const idleTime = now.getTime() - new Date(t.last_touched_at || t.created_at).getTime();
-            const daysIdle = Math.floor(idleTime / (1000 * 60 * 60 * 24));
-            return { ...t, daysIdle };
-          })
-          .filter(t => t.daysIdle > 14)
-          .map(t => ({
-            id: t.id,
-            title: t.title,
-            project_name: t.projects?.name || 'Orbit',
-            days_idle: t.daysIdle
-          }));
-
-        // 4. Identify Waiting Tasks
-        const waiting = (tasks || []).filter(t => t.state === 'Waiting');
-
-        setStats({
-          efficiency,
-          deepWorkHours: Math.round((totalMinutes / 60) * 10) / 10,
-          dailyActivity: reorderedCounts,
-          stagnantTasks: stagnant,
-          waitingTasks: waiting
-        });
       }
-      setIsLoading(false);
-    }
 
-    fetchAnalytics();
-  }, [supabase]);
+      // Shift daily counts so today is the last element
+      const todayIndex = now.getDay();
+      const reorderedCounts = [];
+      for (let i = 0; i < 7; i++) {
+        reorderedCounts.push(dailyCounts[(todayIndex - 6 + i + 7) % 7]);
+      }
+
+      const completedCount = logs?.length || 0;
+      const activeCount = tasks?.filter((t: any) => t.state === 'Active').length || 0;
+      const efficiency = activeCount + completedCount > 0 
+        ? Math.round((completedCount / (activeCount + completedCount)) * 100) 
+        : 0;
+
+      const stagnant = (tasks || [])
+        .map((t: any) => {
+          const idleTime = now.getTime() - new Date(t.last_touched_at || t.created_at).getTime();
+          const daysIdle = Math.floor(idleTime / (1000 * 60 * 60 * 24));
+          return { ...t, daysIdle };
+        })
+        .filter((t: any) => t.daysIdle > 14)
+        .map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          project_name: t.projects?.name || 'Orbit',
+          days_idle: t.daysIdle
+        }));
+
+      const waiting = (tasks || []).filter((t: any) => t.state === 'Waiting');
+
+      return {
+        efficiency,
+        deepWorkHours: Math.round((totalMinutes / 60) * 10) / 10,
+        dailyActivity: reorderedCounts,
+        stagnantTasks: stagnant,
+        waitingTasks: waiting
+      };
+    }
+  });
 
   if (isLoading) return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-700 animate-pulse">Quantifying Momentum...</div>;
+  if (!stats) return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-rose-500/50">Intelligence Fragmented</div>;
 
   const daysLabels = ["M", "T", "W", "T", "F", "S", "S"];
   const maxActivity = Math.max(...stats.dailyActivity, 1);
@@ -170,7 +173,7 @@ export default function ReviewPage() {
             </div>
             <div className="space-y-4">
               {stats.stagnantTasks.length > 0 ? (
-                stats.stagnantTasks.slice(0, 5).map(task => (
+                stats.stagnantTasks.slice(0, 5).map((task: any) => (
                   <div key={task.id} className="flex justify-between items-start gap-4 p-4 bg-void/50 rounded-2xl border border-border/10 group hover:border-entropy/20 transition-all">
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-zinc-200 line-clamp-1 group-hover:text-white transition-colors">{task.title}</span>
@@ -203,7 +206,7 @@ export default function ReviewPage() {
                 <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Suspended Objectives</h3>
               </div>
               <div className="space-y-3">
-                {stats.waitingTasks.map(task => (
+                {stats.waitingTasks.map((task: any) => (
                   <div key={task.id} className="flex justify-between items-center text-xs p-4 hover:bg-white/5 rounded-2xl transition-all border border-transparent hover:border-border/10">
                     <span className="text-zinc-400 truncate pr-4 font-medium">{task.title}</span>
                     <span className="text-primary font-bold text-[9px] uppercase tracking-widest px-2 py-1 bg-primary/5 rounded-lg">Waiting</span>

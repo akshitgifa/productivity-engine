@@ -4,12 +4,14 @@ export interface Task {
   id: string;
   title: string;
   projectId: string;
+  projectName: string;
   projectTier: ProjectTier;
   lastTouchedAt: Date;
   decayThresholdDays: number;
   dueDate?: Date;
   energyTag: 'Grind' | 'Creative' | 'Shallow';
   durationMinutes: number;
+  recurrenceIntervalDays?: number;
 }
 
 export type SessionMode = 'Deep Work' | 'Low Energy' | 'Creative' | 'Admin';
