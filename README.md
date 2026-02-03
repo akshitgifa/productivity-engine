@@ -1,5 +1,5 @@
 # Entropy UI | Dynamic Context Engine
-
+ 
 **Project Status:** Active Beta (God Mode Enabled)
 **Core Concept:** Probabilistic Scheduling & Dynamic Context
 
