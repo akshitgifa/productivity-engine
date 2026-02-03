@@ -45,8 +45,7 @@ export async function POST(req: Request) {
 
   const { messages, sessionId } = body;
 
-  console.log(`[Prophet API] Incoming POST. SessionID: ${sessionId || 'NULL'}`);
-  console.log(`[Prophet API] Request Body Keys:`, Object.keys(body));
+
   
   if (!messages || !Array.isArray(messages)) {
     console.error(`[Prophet API] 'messages' is missing or not an array. Actual type:`, typeof messages);
@@ -84,7 +83,7 @@ export async function POST(req: Request) {
           // If it's a storage URL (starts with http), fetch it on the server
           if (part.url && part.url.startsWith('http')) {
             try {
-              console.log(`[Prophet API] Fetching audio from storage: ${part.url}`);
+
               const response = await fetch(part.url);
               if (!response.ok) throw new Error(`Fetch failed with status ${response.status}`);
               const arrayBuffer = await response.arrayBuffer();
@@ -105,7 +104,7 @@ export async function POST(req: Request) {
             // CONVERT WEBM TO MP3: Gemini works better with MP3
             if (mediaType.includes('webm')) {
               try {
-                console.log(`[Prophet API] Converting WebM to MP3...`);
+
                 buffer = await convertWebmToMp3(buffer);
                 mediaType = 'audio/mp3';
               } catch (convError) {
@@ -142,16 +141,16 @@ export async function POST(req: Request) {
 
   // Gemini role alternation fix: Ensure the conversation doesn't start with assistant
   if (transformedMessages.length > 0 && transformedMessages[0].role === 'assistant') {
-    console.log('[Prophet API] Stripping initial assistant message for Gemini compliance');
+
     transformedMessages = transformedMessages.slice(1);
   }
 
-  console.log(`[Prophet API] Transformed ${transformedMessages.length} messages`);
+
   
   // Check if we have file/audio content
   const lastTransformed = transformedMessages[transformedMessages.length - 1];
   if (Array.isArray(lastTransformed?.content)) {
-    console.log(`[Prophet API] Last message content types:`, lastTransformed.content.map((p: any) => p.type));
+
   }
 
   // Use transformed messages directly instead of convertToModelMessages
@@ -162,7 +161,7 @@ export async function POST(req: Request) {
   if (sessionId && sessionId !== 'undefined' && sessionId !== 'null') {
     const lastUserMessage = messages[messages.length - 1];
     if (lastUserMessage && lastUserMessage.role === 'user') {
-      console.log(`[Prophet API] Proactively saving user message...`);
+
       
       let textContent = '';
       let messageParts = null;

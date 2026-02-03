@@ -66,7 +66,7 @@ function ChatInterface() {
       } as UIMessage,
     ],
     onFinish: (message) => {
-      console.log('[Chat Client] onFinish:', message);
+      // Message completed
     },
     onError: (error) => {
       console.error('[Chat Client] onError:', error);
@@ -117,7 +117,7 @@ function ChatInterface() {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               parts: (m.parts as any) || [{ type: 'text', text: m.content || '' }]
             }));
-            console.log(`[Chat UI] Loaded ${formattedMessages.length} messages for session ${sessionId}`);
+            // Messages loaded for session
             if (formattedMessages.length > 0) {
               setMessages(formattedMessages);
             }
@@ -250,7 +250,7 @@ function ChatInterface() {
       }
 
       const { url: storageUrl } = await uploadResponse.json();
-      console.log(`[Prophet Chat] Audio uploaded to:`, storageUrl);
+      // Audio uploaded successfully
 
       // 2. Send the storage URL to the AI SDK
       // The mediaType is still important for the AI SDK/model to know it's audio
