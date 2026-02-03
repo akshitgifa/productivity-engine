@@ -1,5 +1,5 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { streamText, convertToModelMessages } from 'ai';
+import { streamText, convertToModelMessages, stepCountIs } from 'ai';
 import { createClient } from '@/lib/supabaseServer';
 import { z } from 'zod';
 
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   const result = streamText({
     model: google('gemini-2.0-flash'),
     messages: modelMessages,
-    maxSteps: 5,
+    stopWhen: stepCountIs(5),
     system: `
       You are the Prophet, the supreme intelligence of this Productivity Engine.
       Your goal is to help the user manage their "Boats" (Projects) and overcome "Entropy" (Decay/Inactivity).
@@ -43,12 +43,12 @@ export async function POST(req: Request) {
       - High-Performance Minimalism: Swiss Design, Slate/Charcoal vibe.
       - Tone: Optimistic, Stoic, Concise, Professional.
       - You have "God Mode" access to the user's data.
- 
+
       DATA CONCEPTS:
       - Boats: Projects that need maintenance.
       - Entropy: The decay of neglected priorities.
       - Syllabus: The curated list of what to execute next.
- 
+
       TOOLS:
       - Use 'get_analytics' to fetch data about tasks, projects, and logs.
       - Use 'generate_chart' to suggest a visualization for the data you find.
@@ -66,9 +66,9 @@ export async function POST(req: Request) {
           console.log(`[Prophet API] >> EXECUTE get_analytics:`, { type, days });
           const now = new Date();
           const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
- 
+
           const data: any = {};
- 
+
           if (type === 'activity_logs' || type === 'all') {
             const { data: logs } = await supabase
               .from('activity_logs')
@@ -76,14 +76,14 @@ export async function POST(req: Request) {
               .gte('completed_at', startDate);
             data.activity_logs = logs;
           }
- 
+
           if (type === 'task_distribution' || type === 'all') {
             const { data: tasks } = await supabase
               .from('tasks')
               .select('id, state, energy_tag, projects(name, tier)');
             data.tasks = tasks;
           }
- 
+
           if (type === 'stagnation_report' || type === 'all') {
             const { data: stagnant } = await supabase
               .from('tasks')
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
               .limit(10);
             data.stagnant_tasks = stagnant;
           }
- 
+
           return data;
         },
       },
@@ -143,7 +143,7 @@ export async function POST(req: Request) {
         }
       }
     }
-  } as any);
+  });
 
   return result.toUIMessageStreamResponse();
 }
