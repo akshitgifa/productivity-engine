@@ -48,6 +48,12 @@ function ChatInterface() {
         parts: [{ type: 'text', text: 'I am the Prophet. State your objective or inquire about your momentum.' }],
       } as any,
     ],
+    onFinish: (message) => {
+      console.log('[Chat Client] onFinish:', message);
+    },
+    onError: (error) => {
+      console.error('[Chat Client] onError:', error);
+    }
   });
 
   const isLoading = status === 'submitted' || status === 'streaming';

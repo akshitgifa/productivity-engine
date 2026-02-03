@@ -34,6 +34,7 @@ export async function POST(req: Request) {
   const result = streamText({
     model: google('gemini-2.0-flash'),
     messages: modelMessages,
+    maxSteps: 5,
     system: `
       You are the Prophet, the supreme intelligence of this Productivity Engine.
       Your goal is to help the user manage their "Boats" (Projects) and overcome "Entropy" (Decay/Inactivity).
@@ -42,12 +43,12 @@ export async function POST(req: Request) {
       - High-Performance Minimalism: Swiss Design, Slate/Charcoal vibe.
       - Tone: Optimistic, Stoic, Concise, Professional.
       - You have "God Mode" access to the user's data.
-
+ 
       DATA CONCEPTS:
       - Boats: Projects that need maintenance.
       - Entropy: The decay of neglected priorities.
       - Syllabus: The curated list of what to execute next.
-
+ 
       TOOLS:
       - Use 'get_analytics' to fetch data about tasks, projects, and logs.
       - Use 'generate_chart' to suggest a visualization for the data you find.
@@ -62,12 +63,12 @@ export async function POST(req: Request) {
           days: z.number().default(7),
         }),
         execute: async ({ type, days }: { type: 'activity_logs' | 'task_distribution' | 'stagnation_report' | 'all', days: number }) => {
-          console.log(`[Prophet API] Executing get_analytics: ${type} for ${days} days`);
+          console.log(`[Prophet API] >> EXECUTE get_analytics:`, { type, days });
           const now = new Date();
           const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
-
+ 
           const data: any = {};
-
+ 
           if (type === 'activity_logs' || type === 'all') {
             const { data: logs } = await supabase
               .from('activity_logs')
@@ -75,14 +76,14 @@ export async function POST(req: Request) {
               .gte('completed_at', startDate);
             data.activity_logs = logs;
           }
-
+ 
           if (type === 'task_distribution' || type === 'all') {
             const { data: tasks } = await supabase
               .from('tasks')
               .select('id, state, energy_tag, projects(name, tier)');
             data.tasks = tasks;
           }
-
+ 
           if (type === 'stagnation_report' || type === 'all') {
             const { data: stagnant } = await supabase
               .from('tasks')
@@ -92,7 +93,7 @@ export async function POST(req: Request) {
               .limit(10);
             data.stagnant_tasks = stagnant;
           }
-
+ 
           return data;
         },
       },
@@ -107,32 +108,42 @@ export async function POST(req: Request) {
           dataKeys: z.array(z.string()),
         }),
         execute: async (params: any) => {
-          console.log(`[Prophet API] Executing generate_chart:`, params.title);
+          console.log(`[Prophet API] >> EXECUTE generate_chart:`, JSON.stringify(params, null, 2));
           return params;
         },
       },
     },
-    onFinish: async ({ text, toolCalls, toolResults }) => {
-      console.log(`[Prophet API] onFinish - Text: ${text?.length || 0} chars, Tools: ${toolCalls?.length || 0}`);
+    onFinish: async ({ text, toolCalls, toolResults }: { text: string, toolCalls: any[], toolResults: any[] }) => {
+      console.log(`[Prophet API] onFinish CALL:`, {
+        textLength: text?.length || 0,
+        toolCallsCount: toolCalls?.length || 0,
+        toolResultsCount: toolResults?.length || 0,
+        toolCalls: JSON.stringify(toolCalls, null, 2),
+        toolResults: JSON.stringify(toolResults, null, 2)
+      });
       
       // Save assistant response to Supabase if sessionId is provided
       if (sessionId && sessionId !== 'undefined' && sessionId !== 'null') {
         try {
-          console.log(`[Prophet API] Saving assistant response for session: ${sessionId}`);
-          const { error } = await supabase.from('chat_messages').insert({
+          console.log(`[Prophet API] Saving assistant response...`);
+          const { error, data } = await supabase.from('chat_messages').insert({
             session_id: sessionId,
             role: 'assistant',
-            content: text || '', // Fallback to empty string for tool-only responses
+            content: text || '', 
             parts: [{ type: 'text', text: text || '' }]
           });
-          if (error) console.error("[Prophet API] Error saving assistant message:", error);
-          else console.log("[Prophet API] Assistant message saved successfully");
+          
+          if (error) {
+            console.error("[Prophet API] Supabase Insert Error:", error);
+          } else {
+            console.log("[Prophet API] Supabase Insert Success");
+          }
         } catch (error) {
-          console.error("[Prophet API] Critical failure saving messages:", error);
+          console.error("[Prophet API] Critical save failure:", error);
         }
       }
     }
-  });
+  } as any);
 
   return result.toUIMessageStreamResponse();
 }
