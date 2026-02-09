@@ -54,7 +54,8 @@ export function QuickCaptureDrawer({
     projectName: "",
     duration: "30m",
     energy: "Normal",
-    dueDate: ""
+    dueDate: "",
+    priority: 0
   });
 
   // Effect to update projectName when manualData.projectId or projects change
@@ -127,6 +128,7 @@ export function QuickCaptureDrawer({
         recurrence_interval_days: result.recurrence || null,
         due_date: result.dueDate || null,
         state: 'Active' as const,
+        priority: 0,
         last_touched_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -155,6 +157,7 @@ export function QuickCaptureDrawer({
           recurrenceIntervalDays: newResult.recurrence || null,
           dueDate: newResult.dueDate ? new Date(newResult.dueDate) : undefined,
           state: 'Active',
+          priority: 0,
           created_at: new Date().toISOString(),
         };
         queryClient.setQueryData(['tasks', 'active'], [optimisticTask, ...previousTasks]);
@@ -187,7 +190,8 @@ export function QuickCaptureDrawer({
       projectName: "",
       duration: "30m",
       energy: "Normal",
-      dueDate: ""
+      dueDate: "",
+      priority: 0
     });
   };
 
@@ -273,7 +277,8 @@ export function QuickCaptureDrawer({
         projectName: matchingProject?.name || data.project || "",
         duration: data.duration || "30m",
         energy: data.energy || "Normal",
-        dueDate: data.dueDate ? new Date(new Date(data.dueDate).getTime() - new Date(data.dueDate).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ""
+        dueDate: data.dueDate ? new Date(new Date(data.dueDate).getTime() - new Date(data.dueDate).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
+        priority: data.priority || 0
       });
       setIsAiEnabled(false);
       setIsExpanded(false);
@@ -329,6 +334,7 @@ export function QuickCaptureDrawer({
       energy: manualData.energy,
       projectId: manualData.projectId === "NONE" ? undefined : manualData.projectId,
       dueDate: manualData.dueDate || undefined,
+      priority: manualData.priority,
       recurrence: null
     });
   };
@@ -506,6 +512,29 @@ export function QuickCaptureDrawer({
                       >
                         {isExpanded ? "Less Options" : "More Options"}
                       </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 px-0.5">
+                    <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest ml-1">Priority</label>
+                    <div className="flex items-center gap-1 bg-void/30 p-1 rounded-xl border border-border/20">
+                      {[0,1,2,3,4,5].map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setManualData({ ...manualData, priority: p })}
+                          className={cn(
+                            "flex-1 h-9 rounded-lg text-[9px] font-black transition-all border flex items-center justify-center",
+                            manualData.priority === p 
+                              ? (p === 0 ? "bg-zinc-800 border-zinc-600 text-zinc-400" :
+                                 p === 1 ? "bg-rose-500 border-rose-400 text-void shadow-[0_0_15px_rgba(244,63,94,0.4)]" :
+                                 "bg-primary border-primary/50 text-void")
+                              : "bg-transparent border-transparent text-zinc-600 hover:text-zinc-400"
+                          )}
+                        >
+                          P{p}
+                        </button>
+                      ))}
                     </div>
                   </div>
 

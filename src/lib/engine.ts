@@ -20,6 +20,8 @@ export interface Task {
   completedSubtasksCount?: number;
   waitingUntil?: Date | null;
   projectColor?: string;
+  priority: number;
+  created_at?: string;
 }
 
 export type SessionMode = 'Deep Work' | 'Low Energy' | 'Creative' | 'Admin';
@@ -62,8 +64,9 @@ export function calculateUrgencyScore(task: Task, currentMode: SessionMode): num
     contextMultiplier = 2.0; // Significant boost for focused sessions
   }
 
-  // Formula: Score = (Tier Weight) × (Entropy Ratio^1.5 for non-linear decay) × (Context Multiplier)
-  const score = tierWeight * Math.pow(entropyRatio, 1.5) * contextMultiplier;
+  // Formula: Score = (Base Boost from Priority) + (Tier Weight) × (Entropy Ratio^1.5) × (Context Multiplier)
+  const priorityBoost = (task.priority || 0) * 1000;
+  const score = priorityBoost + (tierWeight * Math.pow(entropyRatio, 1.5) * contextMultiplier);
   
   return parseFloat(score.toFixed(4));
 }
@@ -86,7 +89,9 @@ export function mapTaskData(t: any): Task {
     subtasksCount: t.subtasks?.length || 0,
     completedSubtasksCount: t.subtasks?.filter((st: any) => st.is_completed).length || 0,
     waitingUntil: t.waiting_until ? new Date(t.waiting_until) : null,
-    projectColor: getProjectColor(t.projects?.name || "Inbox", t.projects?.color)
+    projectColor: getProjectColor(t.projects?.name || "Inbox", t.projects?.color),
+    priority: t.priority || 0,
+    created_at: t.created_at
   };
 }
 
@@ -100,6 +105,13 @@ export function sortTasksByUrgency(tasks: Task[], currentMode: SessionMode): Tas
   return [...tasks].sort((a, b) => {
     const scoreA = calculateUrgencyScore(a, currentMode);
     const scoreB = calculateUrgencyScore(b, currentMode);
-    return scoreB - scoreA;
+    
+    // Primary: Score (which includes priority)
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    
+    // Secondary: Creation Date (Newest first)
+    const dateA = new Date(a.created_at || 0).getTime();
+    const dateB = new Date(b.created_at || 0).getTime();
+    return dateB - dateA;
   });
 }
