@@ -15,29 +15,25 @@ import { processOutbox } from "@/lib/sync";
 interface QuickCaptureDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  initialCaptureMode?: 'task' | 'thought';
+  initialProjectId?: string;
 }
 
-export function QuickCaptureDrawer({ isOpen, onClose }: QuickCaptureDrawerProps) {
+export function QuickCaptureDrawer({ 
+  isOpen, 
+  onClose, 
+  initialCaptureMode = 'task',
+  initialProjectId = "NONE"
+}: QuickCaptureDrawerProps) {
   const isOnline = useOnlineStatus();
   // Capture modes: 'task' (AI or Manual), 'thought' (silent dump to notes)
-  const [captureMode, setCaptureMode] = useState<'task' | 'thought'>('task');
+  const [captureMode, setCaptureMode] = useState<'task' | 'thought'>(initialCaptureMode);
   const [isAiEnabled, setIsAiEnabled] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [input, setInput] = useState("");
   const [thoughtInput, setThoughtInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // Manual Form State
-  const [manualData, setManualData] = useState({
-    title: "",
-    description: "",
-    projectId: "NONE",
-    projectName: "",
-    duration: "30m",
-    energy: "Normal",
-    dueDate: ""
-  });
-
   const supabase = createClient();
   const queryClient = useQueryClient();
 
@@ -49,6 +45,40 @@ export function QuickCaptureDrawer({ isOpen, onClose }: QuickCaptureDrawerProps)
     },
     enabled: isOpen
   });
+
+  // Manual Form State
+  const [manualData, setManualData] = useState({
+    title: "",
+    description: "",
+    projectId: initialProjectId,
+    projectName: "",
+    duration: "30m",
+    energy: "Normal",
+    dueDate: ""
+  });
+
+  // Effect to update projectName when manualData.projectId or projects change
+  React.useEffect(() => {
+    if (manualData.projectId === "NONE") {
+      setManualData(prev => ({ ...prev, projectName: "Inbox" }));
+    } else {
+      const p = projects.find((p: any) => p.id === manualData.projectId);
+      if (p) {
+        setManualData(prev => ({ ...prev, projectName: p.name }));
+      }
+    }
+  }, [manualData.projectId, projects]);
+
+  // Effect to sync state with props when drawer opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setCaptureMode(initialCaptureMode);
+      setManualData(prev => ({
+        ...prev,
+        projectId: initialProjectId
+      }));
+    }
+  }, [isOpen, initialCaptureMode, initialProjectId]);
 
   // 2. Add Task Mutation using Dexie
   const addTaskMutation = useMutation({

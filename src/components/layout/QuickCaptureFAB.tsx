@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Plus } from "lucide-react";
 import dynamic from "next/dynamic";
+import { usePathname, useParams } from "next/navigation";
 
 const QuickCaptureDrawer = dynamic(
   () => import("@/components/ui/QuickCaptureDrawer").then((mod) => mod.QuickCaptureDrawer),
@@ -11,6 +12,15 @@ const QuickCaptureDrawer = dynamic(
 
 export function QuickCaptureFAB() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const pathname = usePathname();
+  const params = useParams();
+
+  // Context Detection
+  const isNotesPage = pathname === "/notes";
+  const isProjectPage = pathname?.startsWith("/portfolio/") && params?.id;
+  
+  const initialCaptureMode = isNotesPage ? "thought" : "task";
+  const initialProjectId = isProjectPage ? (params.id as string) : "NONE";
 
   return (
     <>
@@ -28,6 +38,8 @@ export function QuickCaptureFAB() {
         <QuickCaptureDrawer 
           isOpen={isDrawerOpen} 
           onClose={() => setIsDrawerOpen(false)} 
+          initialCaptureMode={initialCaptureMode}
+          initialProjectId={initialProjectId}
         />
       )}
     </>
