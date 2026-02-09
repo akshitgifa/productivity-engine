@@ -1,16 +1,68 @@
 "use client";
 
-import React from "react";
+import React, { useRef, useCallback } from "react";
 import { Reorder, useDragControls } from "framer-motion";
-import { GripVertical } from "lucide-react";
 
 interface ReorderableItemProps<T> {
   value: T;
   children: React.ReactNode;
 }
 
+const HOLD_DELAY_MS = 250;
+
 export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>) {
   const controls = useDragControls();
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDragActivated = useRef(false);
+  const startPos = useRef<{ x: number; y: number } | null>(null);
+  const itemRef = useRef<HTMLDivElement>(null);
+
+  const clearHoldTimer = useCallback(() => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }, []);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    isDragActivated.current = false;
+    startPos.current = { x: e.clientX, y: e.clientY };
+
+    holdTimerRef.current = setTimeout(() => {
+      isDragActivated.current = true;
+      // Visual feedback: subtle pulse
+      if (itemRef.current) {
+        itemRef.current.style.transform = 'scale(1.02)';
+        itemRef.current.style.boxShadow = '0 10px 40px rgba(0,0,0,0.3)';
+        itemRef.current.style.zIndex = '50';
+      }
+      controls.start(e as unknown as PointerEvent);
+    }, HOLD_DELAY_MS);
+  }, [controls]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    // If drag already activated, let framer-motion handle it
+    if (isDragActivated.current) return;
+
+    // If finger moved more than 5px before hold timer fired, it's a scroll — cancel
+    if (startPos.current) {
+      const dx = Math.abs(e.clientX - startPos.current.x);
+      const dy = Math.abs(e.clientY - startPos.current.y);
+      if (dx > 5 || dy > 5) {
+        clearHoldTimer();
+      }
+    }
+  }, [clearHoldTimer]);
+
+  const handlePointerUp = useCallback(() => {
+    clearHoldTimer();
+    isDragActivated.current = false;
+    if (itemRef.current) {
+      itemRef.current.style.transform = '';
+      itemRef.current.style.boxShadow = '';
+      itemRef.current.style.zIndex = '';
+    }
+  }, [clearHoldTimer]);
 
   return (
     <Reorder.Item
@@ -20,19 +72,17 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
       whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 50 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       as="div"
-      className="relative group/reorder"
+      className="transition-shadow duration-200"
     >
-      {/* Drag Handle */}
       <div
-        onPointerDown={(e) => controls.start(e)}
-        className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center z-10 cursor-grab active:cursor-grabbing touch-none opacity-40 md:opacity-0 md:group-hover/reorder:opacity-100 transition-opacity"
-        style={{ touchAction: "none" }}
+        ref={itemRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        className="transition-all duration-150"
+        style={{ touchAction: "pan-x" }}
       >
-        <div className="w-6 h-10 rounded-lg bg-white/5 backdrop-blur-sm flex items-center justify-center border border-white/10">
-          <GripVertical size={14} className="text-zinc-500" />
-        </div>
-      </div>
-      <div className="pl-8 md:pl-0 md:group-hover/reorder:pl-8 transition-all duration-200">
         {children}
       </div>
     </Reorder.Item>
