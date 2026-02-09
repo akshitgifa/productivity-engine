@@ -49,6 +49,7 @@ export function useTaskFulfillment() {
         est_duration_minutes: task.durationMinutes || 30,
         energy_tag: (task.energyTag as any) || "Shallow",
         state: "Active" as const,
+        priority: 0,
         recurrence_interval_days: task.recurrenceIntervalDays,
         waiting_until: nextRunDate.toISOString(),
         created_at: new Date().toISOString(),
