@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AnimatePresence, motion, Reorder } from "framer-motion";
+import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { mapTaskData, Task } from "@/lib/engine";
 import { getProjectColor, hexToRgba, PRESET_COLORS } from "@/lib/colors";
 
@@ -618,13 +619,9 @@ export default function ProjectDetailPage() {
                         as="div"
                       >
                         {tabTasks.map((task) => (
-                          <Reorder.Item
+                          <ReorderableItem
                             key={task.id}
                             value={task}
-                            whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 50 }}
-                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                            className="cursor-grab active:cursor-grabbing"
-                            as="div"
                           >
                             <FocusCard 
                               title={task.title}
@@ -640,7 +637,7 @@ export default function ProjectDetailPage() {
                               completedSubtasksCount={task.completedSubtasksCount}
                               projectColor={projectColor}
                             />
-                          </Reorder.Item>
+                          </ReorderableItem>
                         ))}
                       </Reorder.Group>
                     );

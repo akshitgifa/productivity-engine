@@ -8,6 +8,7 @@ import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 import { mapTaskData } from "@/lib/engine";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AnimatePresence, Reorder } from "framer-motion";
+import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { Task } from "@/lib/engine";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -231,13 +232,9 @@ export default function TasksPage() {
               as="div"
             >
               {filteredTasks.map((task: any) => (
-                <Reorder.Item
+                <ReorderableItem
                   key={task.id}
                   value={task}
-                  whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 50 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                  className="cursor-grab active:cursor-grabbing"
-                  as="div"
                 >
                   <FocusCard 
                     key={task.id}
@@ -253,7 +250,7 @@ export default function TasksPage() {
                     subtasksCount={task.subtasksCount}
                     completedSubtasksCount={task.completedSubtasksCount}
                   />
-                </Reorder.Item>
+                </ReorderableItem>
               ))}
             </Reorder.Group>
           )}

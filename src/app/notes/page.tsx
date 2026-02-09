@@ -17,6 +17,7 @@ import {
   Sparkles
 } from "lucide-react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
+import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { cn } from "@/lib/utils";
 
 import { db } from "@/lib/db";
@@ -198,19 +199,15 @@ export default function NotesPage() {
           as="div"
         >
           {filteredNotes.map((note) => (
-            <Reorder.Item
+            <ReorderableItem
               key={note.id}
               value={note}
-              whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 50 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="cursor-grab active:cursor-grabbing"
-              as="div"
             >
               <NoteCard 
                 note={note} 
                 onClick={() => setSelectedNote(note)} 
               />
-            </Reorder.Item>
+            </ReorderableItem>
           ))}
         </Reorder.Group>
       ) : (
