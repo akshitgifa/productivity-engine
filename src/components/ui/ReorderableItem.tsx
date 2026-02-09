@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useCallback } from "react";
+import React, { useRef, useCallback, useEffect } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 
 interface ReorderableItemProps<T> {
@@ -8,14 +8,13 @@ interface ReorderableItemProps<T> {
   children: React.ReactNode;
 }
 
-const HOLD_DELAY_MS = 250;
+const HOLD_DELAY_MS = 200;
 
 export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>) {
   const controls = useDragControls();
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDragActivated = useRef(false);
   const startPos = useRef<{ x: number; y: number } | null>(null);
-  const pointerIdRef = useRef<number | null>(null);
   const itemRef = useRef<HTMLDivElement>(null);
 
   const clearHoldTimer = useCallback(() => {
@@ -25,21 +24,30 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
     }
   }, []);
 
+  // Non-passive touchmove listener — the ONLY way to cancel browser scroll mid-gesture
+  useEffect(() => {
+    const el = itemRef.current;
+    if (!el) return;
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (isDragActivated.current) {
+        e.preventDefault();
+      }
+    };
+
+    // Must be { passive: false } to allow preventDefault()
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, []);
+
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     isDragActivated.current = false;
     startPos.current = { x: e.clientX, y: e.clientY };
-    pointerIdRef.current = e.pointerId;
 
     holdTimerRef.current = setTimeout(() => {
       isDragActivated.current = true;
-      // Capture pointer so all moves go to this element, not document scroll
-      if (itemRef.current && pointerIdRef.current !== null) {
-        try {
-          itemRef.current.setPointerCapture(pointerIdRef.current);
-        } catch {
-          // Pointer may have been released
-        }
-        itemRef.current.style.touchAction = 'none';
+      
+      if (itemRef.current) {
         itemRef.current.style.transform = 'scale(1.02)';
         itemRef.current.style.boxShadow = '0 10px 40px rgba(0,0,0,0.3)';
         itemRef.current.style.zIndex = '50';
@@ -49,10 +57,8 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
   }, [controls]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    // If drag already activated, let framer-motion handle it
     if (isDragActivated.current) return;
 
-    // If finger moved more than 5px before hold timer fired, it's a scroll — cancel
     if (startPos.current) {
       const dx = Math.abs(e.clientX - startPos.current.x);
       const dy = Math.abs(e.clientY - startPos.current.y);
@@ -62,22 +68,14 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
     }
   }, [clearHoldTimer]);
 
-  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+  const handlePointerUp = useCallback(() => {
     clearHoldTimer();
     isDragActivated.current = false;
-    // Release pointer capture
-    if (itemRef.current && pointerIdRef.current !== null) {
-      try {
-        itemRef.current.releasePointerCapture(pointerIdRef.current);
-      } catch {
-        // Pointer may have already been released
-      }
-      itemRef.current.style.touchAction = '';
+    if (itemRef.current) {
       itemRef.current.style.transform = '';
       itemRef.current.style.boxShadow = '';
       itemRef.current.style.zIndex = '';
     }
-    pointerIdRef.current = null;
   }, [clearHoldTimer]);
 
   return (
@@ -88,7 +86,6 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
       whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 50 }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       as="div"
-      className="transition-shadow duration-200"
     >
       <div
         ref={itemRef}
