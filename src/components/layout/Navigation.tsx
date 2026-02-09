@@ -13,7 +13,6 @@ const NAV_ITEMS = [
   { label: "Focus", href: "/", icon: Home },
   { label: "Notes", href: "/notes", icon: FileText },
   { label: "History", href: "/history", icon: List },
-  { label: "Intel", href: "/docs", icon: BookOpen },
   { label: "Projects", href: "/portfolio", icon: FolderOpen },
   { label: "Analytics", href: "/review", icon: BarChart3 },
   { label: "Assistant", href: "/chat", icon: Sparkles },
@@ -92,13 +91,6 @@ export function Navigation() {
             .eq('state', 'Active')
             .order('created_at', { ascending: false });
           return (data || []).map(mapTaskData);
-        }
-      });
-    } else if (href === "/docs") {
-      queryClient.prefetchQuery({
-        queryKey: ['documentation'],
-        queryFn: async () => {
-          return await db.documentation.toArray();
         }
       });
     }

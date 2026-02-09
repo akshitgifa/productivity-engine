@@ -53,17 +53,6 @@ export async function initialSync() {
     }
   }
 
-  // Initial Sync for Documentation
-  fetch('/api/docs').then(async (docsRes) => {
-    if (docsRes.ok) {
-      const docs = await docsRes.json();
-      if (Array.isArray(docs)) {
-        await db.documentation.bulkPut(docs);
-        console.log('[Sync] Documentation indexed:', docs.length);
-      }
-    }
-  }).catch(e => console.warn('[Sync] Failed to fetch documentation:', e));
-
   console.log('[Sync] Initial sync complete.');
 }
 
