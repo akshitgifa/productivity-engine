@@ -15,6 +15,7 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDragActivated = useRef(false);
   const startPos = useRef<{ x: number; y: number } | null>(null);
+  const pointerIdRef = useRef<number | null>(null);
   const itemRef = useRef<HTMLDivElement>(null);
 
   const clearHoldTimer = useCallback(() => {
@@ -27,11 +28,17 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     isDragActivated.current = false;
     startPos.current = { x: e.clientX, y: e.clientY };
+    pointerIdRef.current = e.pointerId;
 
     holdTimerRef.current = setTimeout(() => {
       isDragActivated.current = true;
-      // Disable browser touch handling so framer-motion takes over
-      if (itemRef.current) {
+      // Capture pointer so all moves go to this element, not document scroll
+      if (itemRef.current && pointerIdRef.current !== null) {
+        try {
+          itemRef.current.setPointerCapture(pointerIdRef.current);
+        } catch {
+          // Pointer may have been released
+        }
         itemRef.current.style.touchAction = 'none';
         itemRef.current.style.transform = 'scale(1.02)';
         itemRef.current.style.boxShadow = '0 10px 40px rgba(0,0,0,0.3)';
@@ -55,15 +62,22 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
     }
   }, [clearHoldTimer]);
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
     clearHoldTimer();
     isDragActivated.current = false;
-    if (itemRef.current) {
+    // Release pointer capture
+    if (itemRef.current && pointerIdRef.current !== null) {
+      try {
+        itemRef.current.releasePointerCapture(pointerIdRef.current);
+      } catch {
+        // Pointer may have already been released
+      }
       itemRef.current.style.touchAction = '';
       itemRef.current.style.transform = '';
       itemRef.current.style.boxShadow = '';
       itemRef.current.style.zIndex = '';
     }
+    pointerIdRef.current = null;
   }, [clearHoldTimer]);
 
   return (
