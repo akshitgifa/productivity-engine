@@ -14,8 +14,9 @@ export function useTaskFulfillment() {
     energyTag?: string;
   }) => {
     // 1. Mark task as done in local DB
-    await db.tasks.update(task.id, { state: "Done", updated_at: new Date().toISOString() });
-    await db.recordAction("tasks", "update", { id: task.id, state: "Done" });
+    const now = new Date().toISOString();
+    await db.tasks.update(task.id, { state: "Done", updated_at: now });
+    await db.recordAction("tasks", "update", { id: task.id, state: "Done", updated_at: now });
 
     // 2. Log activity in local DB
     const activityLog = {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase";
+import { db } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -209,26 +210,34 @@ export default function ExportPage() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects", "export"],
     queryFn: async () => {
-      const { data } = await supabase.from("projects").select("id, name, color").order("name", { ascending: true });
-      return (data || []) as Project[];
+      const data = await db.projects.orderBy("name").toArray();
+      return data as Project[];
     },
   });
 
   const { data: completedTasks = [] } = useQuery({
     queryKey: ["tasks", "completed", startDate.toISOString(), endDate.toISOString()],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("tasks")
-        .select("id, title, energy_tag, project_id, updated_at, est_duration_minutes, projects(name, color)")
-        .eq("state", "Done")
-        .gte("updated_at", startDate.toISOString())
-        .lte("updated_at", endDate.toISOString())
-        .order("updated_at", { ascending: false });
+      const startIso = startDate.toISOString();
+      const endIso = endDate.toISOString();
 
-      return (data || []).map((task: any) => ({
-        ...task,
-        projects: Array.isArray(task.projects) ? task.projects[0] : task.projects,
-      })) as CompletedTask[];
+      const tasks = await db.tasks
+        .where("state")
+        .equals("Done")
+        .and((task) => task.updated_at >= startIso && task.updated_at <= endIso)
+        .toArray();
+
+      const sorted = tasks.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+
+      return await Promise.all(
+        sorted.map(async (task) => {
+          const project = task.project_id ? await db.projects.get(task.project_id) : null;
+          return {
+            ...task,
+            projects: project ? { name: project.name, color: project.color } : null,
+          } as CompletedTask;
+        })
+      );
     },
   });
 

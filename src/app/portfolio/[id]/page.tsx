@@ -237,7 +237,7 @@ export default function ProjectDetailPage() {
   const handleUpdateProject = async () => {
     const { error } = await supabase
       .from('projects')
-      .update(editForm)
+      .update({ ...editForm, updated_at: new Date().toISOString() })
       .eq('id', id);
     
     if (!error) {
