@@ -89,7 +89,6 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
       }
       if (updates.energy_tag !== undefined) domainUpdates.energyTag = updates.energy_tag;
       if (updates.recurrence_interval_days !== undefined) domainUpdates.recurrenceIntervalDays = updates.recurrence_interval_days;
-      if (updates.priority !== undefined) domainUpdates.priority = updates.priority;
       
       queryClient.setQueryData(["tasks", "active"], (old: any) => 
         old?.map((t: any) => t.id === task.id ? { ...t, ...domainUpdates } : t)
@@ -502,25 +501,6 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
                         placeholder="--"
                     />
                     <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest shrink-0">Days</span>
-                </div>
-
-                <div className="flex items-center gap-1 bg-void/30 p-1 rounded-xl border border-border/20">
-                    {[0,1,2,3,4,5].map((p) => (
-                        <button
-                            key={p}
-                            onClick={() => updateTaskMutation.mutate({ priority: p })}
-                            className={cn(
-                                "w-8 h-8 rounded-lg text-[9px] font-black transition-all border flex items-center justify-center",
-                                task.priority === p 
-                                    ? (p === 0 ? "bg-zinc-800 border-zinc-600 text-zinc-400" :
-                                       p === 1 ? "bg-rose-500 border-rose-400 text-void shadow-[0_0_15px_rgba(244,63,94,0.4)]" :
-                                       "bg-primary border-primary/50 text-void")
-                                    : "bg-transparent border-transparent text-zinc-600 hover:text-zinc-400"
-                            )}
-                        >
-                            P{p}
-                        </button>
-                    ))}
                 </div>
             </div>
           </div>

@@ -16,7 +16,7 @@ import {
   LayoutList,
   Sparkles
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, Reorder } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 import { db } from "@/lib/db";
@@ -34,7 +34,12 @@ export default function NotesPage() {
     queryKey: ["notes"],
     queryFn: async () => {
       const allNotes = await db.notes.toArray();
-      const sorted = allNotes.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+      const sorted = allNotes.sort((a, b) => {
+        const orderA = a.sort_order ?? 0;
+        const orderB = b.sort_order ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return b.updated_at.localeCompare(a.updated_at);
+      });
       
       return await Promise.all(sorted.map(async (n) => {
         const project = n.project_id ? await db.projects.get(n.project_id) : null;
@@ -59,6 +64,7 @@ export default function NotesPage() {
         id: crypto.randomUUID(),
         title: "New Strategy",
         content: "",
+        sort_order: 0,
         project_id: selectedProjectId === "all" ? undefined : selectedProjectId,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -75,6 +81,25 @@ export default function NotesPage() {
       setSelectedNote(newNote);
     },
   });
+
+  // Reorder handler for notes
+  const handleReorderNotes = async (reorderedNotes: Note[]) => {
+    // Optimistic update
+    queryClient.setQueryData(["notes"], reorderedNotes.map((n, i) => ({ ...n, sort_order: i + 1 })));
+    
+    // Persist to Dexie + outbox
+    for (let i = 0; i < reorderedNotes.length; i++) {
+      const note = reorderedNotes[i];
+      const newOrder = i + 1;
+      const currentOrder = (note as any).sort_order ?? 0;
+      if (currentOrder !== newOrder) {
+        const update = { sort_order: newOrder, updated_at: new Date().toISOString() };
+        await db.notes.update(note.id, update);
+        await db.recordAction('notes', 'update', { id: note.id, ...update });
+      }
+    }
+    processOutbox().catch(() => {});
+  };
 
   const filteredNotes = notes.filter((note) => {
     const matchesSearch = note.title.toLowerCase().includes(search.toLowerCase()) || 
@@ -162,18 +187,32 @@ export default function NotesPage() {
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Synchronizing Archive...</p>
         </div>
       ) : filteredNotes.length > 0 ? (
-        <div className={cn(
-          "grid gap-4",
-          viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
-        )}>
+        <Reorder.Group
+          axis="y"
+          values={filteredNotes}
+          onReorder={(reordered) => handleReorderNotes(reordered)}
+          className={cn(
+            "grid gap-4",
+            viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
+          )}
+          as="div"
+        >
           {filteredNotes.map((note) => (
-            <NoteCard 
-              key={note.id} 
-              note={note} 
-              onClick={() => setSelectedNote(note)} 
-            />
+            <Reorder.Item
+              key={note.id}
+              value={note}
+              whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 50 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="cursor-grab active:cursor-grabbing"
+              as="div"
+            >
+              <NoteCard 
+                note={note} 
+                onClick={() => setSelectedNote(note)} 
+              />
+            </Reorder.Item>
           ))}
-        </div>
+        </Reorder.Group>
       ) : (
         <div className="py-32 text-center border border-dashed border-border rounded-[3rem] bg-surface/20">
           <div className="max-w-xs mx-auto flex flex-col items-center">

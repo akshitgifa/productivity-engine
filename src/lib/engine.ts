@@ -20,8 +20,7 @@ export interface Task {
   completedSubtasksCount?: number;
   waitingUntil?: Date | null;
   projectColor?: string;
-  priority: number;
-  created_at?: string;
+  sortOrder: number;
 }
 
 export type SessionMode = 'Deep Work' | 'Low Energy' | 'Creative' | 'Admin';
@@ -64,9 +63,8 @@ export function calculateUrgencyScore(task: Task, currentMode: SessionMode): num
     contextMultiplier = 2.0; // Significant boost for focused sessions
   }
 
-  // Formula: Score = (Base Boost from Priority) + (Tier Weight) × (Entropy Ratio^1.5) × (Context Multiplier)
-  const priorityBoost = (task.priority || 0) * 1000;
-  const score = priorityBoost + (tierWeight * Math.pow(entropyRatio, 1.5) * contextMultiplier);
+  // Formula: Score = (Tier Weight) × (Entropy Ratio^1.5 for non-linear decay) × (Context Multiplier)
+  const score = tierWeight * Math.pow(entropyRatio, 1.5) * contextMultiplier;
   
   return parseFloat(score.toFixed(4));
 }
@@ -90,8 +88,7 @@ export function mapTaskData(t: any): Task {
     completedSubtasksCount: t.subtasks?.filter((st: any) => st.is_completed).length || 0,
     waitingUntil: t.waiting_until ? new Date(t.waiting_until) : null,
     projectColor: getProjectColor(t.projects?.name || "Inbox", t.projects?.color),
-    priority: t.priority || 0,
-    created_at: t.created_at
+    sortOrder: t.sort_order ?? 0
   };
 }
 
@@ -105,13 +102,19 @@ export function sortTasksByUrgency(tasks: Task[], currentMode: SessionMode): Tas
   return [...tasks].sort((a, b) => {
     const scoreA = calculateUrgencyScore(a, currentMode);
     const scoreB = calculateUrgencyScore(b, currentMode);
-    
-    // Primary: Score (which includes priority)
-    if (scoreB !== scoreA) return scoreB - scoreA;
-    
-    // Secondary: Creation Date (Newest first)
-    const dateA = new Date(a.created_at || 0).getTime();
-    const dateB = new Date(b.created_at || 0).getTime();
-    return dateB - dateA;
+    return scoreB - scoreA;
+  });
+}
+
+/**
+ * Sort tasks by user-defined order (sort_order ascending).
+ * Tasks with the same sort_order are tie-broken by urgency (higher urgency first).
+ */
+export function sortTasksByUserOrder(tasks: Task[], currentMode: SessionMode): Task[] {
+  return [...tasks].sort((a, b) => {
+    // Primary: user-defined order (ascending — lower number = higher position)
+    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+    // Tiebreaker: urgency score (descending — higher urgency first)
+    return calculateUrgencyScore(b, currentMode) - calculateUrgencyScore(a, currentMode);
   });
 }

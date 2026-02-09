@@ -35,7 +35,7 @@ export interface Task {
   energy_tag: 'Deep' | 'Normal' | 'Shallow';
   blocked_by_id?: string;
   recurrence_interval_days?: number;
-  priority: number;
+  sort_order: number;
   last_touched_at: string;
   created_at: string;
   updated_at: string;
@@ -58,6 +58,7 @@ export interface Note {
   task_id?: string;
   title: string;
   content: string;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }
@@ -80,13 +81,37 @@ export class EntropyDatabase extends Dexie {
 
   constructor() {
     super('EntropyDatabase');
-    this.version(2).stores({
+    this.version(1).stores({
       projects: 'id, name, last_touched_at',
-      tasks: 'id, project_id, state, due_date, priority',
+      tasks: 'id, project_id, state, due_date',
       activity_logs: 'id, task_id, project_id',
       notes: 'id, project_id, task_id',
       documentation: 'id, title, path',
       sync_outbox: '++id, timestamp'
+    });
+    this.version(2).stores({
+      projects: 'id, name, last_touched_at',
+      tasks: 'id, project_id, state, due_date, sort_order',
+      activity_logs: 'id, task_id, project_id',
+      notes: 'id, project_id, task_id',
+      documentation: 'id, title, path',
+      sync_outbox: '++id, timestamp'
+    }).upgrade(tx => {
+      return tx.table('tasks').toCollection().modify(task => {
+        if (task.sort_order === undefined) task.sort_order = 0;
+      });
+    });
+    this.version(3).stores({
+      projects: 'id, name, last_touched_at',
+      tasks: 'id, project_id, state, due_date, sort_order',
+      activity_logs: 'id, task_id, project_id',
+      notes: 'id, project_id, task_id, sort_order',
+      documentation: 'id, title, path',
+      sync_outbox: '++id, timestamp'
+    }).upgrade(tx => {
+      return tx.table('notes').toCollection().modify(note => {
+        if (note.sort_order === undefined) note.sort_order = 0;
+      });
     });
   }
 

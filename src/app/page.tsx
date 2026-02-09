@@ -6,15 +6,15 @@ import { ModeSelector } from "@/components/layout/ModeSelector";
 import { TimeAvailableSelector } from "@/components/layout/TimeAvailableSelector";
 import { useUserStore } from "@/store/userStore";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
-import { CheckCircle2, Share2, ChevronRight } from "lucide-react";
+import { CheckCircle2, Share2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
-import { sortTasksByUrgency, filterAdminTasks, mapTaskData } from "@/lib/engine";
+import { sortTasksByUserOrder, filterAdminTasks, mapTaskData } from "@/lib/engine";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { Task } from "@/lib/engine";
 
 import { db } from "@/lib/db";
@@ -27,12 +27,6 @@ export default function Home() {
   const queryClient = useQueryClient();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [projectFilters, setProjectFilters] = useState<string[]>([]);
-  const [expandedSegments, setExpandedSegments] = useState<Record<string, boolean>>({
-    focus: true,
-    ongoing: false,
-    inbox: false
-  });
-
   // 1. Fetch Active Tasks Query from Local DB
   const { data: allActive = [], isLoading: isTasksLoading } = useQuery({
     queryKey: ['tasks', 'active'],
@@ -237,21 +231,33 @@ export default function Home() {
     constrainedTasks = constrainedTasks.filter(t => t.durationMinutes <= timeAvailable);
   }
 
-  const sorted = sortTasksByUrgency(constrainedTasks, mode);
-  
-  // Segmenting logic
-  const focusTasks = sorted.filter(t => t.priority >= 1 || (t.dueDate && new Date(t.dueDate).getTime() - new Date().getTime() < 24 * 60 * 60 * 1000));
-  const otherTasks = sorted.filter(t => !focusTasks.find(ft => ft.id === t.id));
-  
-  const inboxTasks = otherTasks.filter(t => t.projectName === "Inbox");
-  const ongoingTasks = otherTasks.filter(t => t.projectName !== "Inbox");
-
+  const sorted = sortTasksByUserOrder(constrainedTasks, mode);
+  const { focus: focusTasks, admin: adminTasks } = filterAdminTasks(sorted);
   const isLoading = isTasksLoading;
-  const activeFilterCount = projectFilters.length;
- 
-  const toggleSegment = (id: string) => {
-    setExpandedSegments(prev => ({ ...prev, [id]: !prev[id] }));
+
+  // Reorder handler: updates sort_order locally in Dexie and syncs via outbox
+  const handleReorder = async (reorderedTasks: Task[]) => {
+    // Optimistic UI update via query cache
+    const updatedAll = allActive.map(t => {
+      const idx = reorderedTasks.findIndex(rt => rt.id === t.id);
+      if (idx !== -1) return { ...t, sortOrder: idx + 1 };
+      return t;
+    });
+    queryClient.setQueryData(['tasks', 'active'], updatedAll);
+
+    // Persist to Dexie + outbox
+    for (let i = 0; i < reorderedTasks.length; i++) {
+      const task = reorderedTasks[i];
+      const newOrder = i + 1;
+      if (task.sortOrder !== newOrder) {
+        const update = { sort_order: newOrder, updated_at: new Date().toISOString() };
+        await db.tasks.update(task.id, update);
+        await db.recordAction('tasks', 'update', { id: task.id, ...update });
+      }
+    }
+    processOutbox().catch(() => {});
   };
+  const activeFilterCount = projectFilters.length;
 
   const toggleProjectFilter = (id: string) => {
     const next = projectFilters.includes(id)
@@ -362,161 +368,123 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="md:col-span-12 space-y-12">
-          {/* Section: Focus Objectives */}
-          <section className="space-y-6">
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                Critical Mission
-              </h2>
-              <span className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest bg-void/50 px-3 py-1 rounded-full border border-border/20">
-                {focusTasks.length} Entities
-              </span>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {isLoading ? (
-                 Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="bg-surface/50 border border-border/10 rounded-3xl p-6 h-48 animate-pulse" />
-                ))
-              ) : focusTasks.length > 0 ? (
-                focusTasks.map((task, index) => (
-                  <motion.div
-                    key={task.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <FocusCard
-                      title={task.title}
-                      project={task.projectName}
-                      tier={task.projectTier as any}
-                      duration={task.durationMinutes < 60 ? `${task.durationMinutes}m` : `${Math.floor(task.durationMinutes / 60)}h`}
-                      dueDate={task.dueDate}
-                      isActive={true}
-                      onComplete={() => completeMutation.mutate(task)}
-                      onDelete={() => deleteMutation.mutate(task.id)}
-                      onClick={() => setSelectedTaskId(task.id)}
-                      subtasksCount={task.subtasksCount}
-                      completedSubtasksCount={task.completedSubtasksCount}
-                      projectColor={task.projectColor}
-                      priority={task.priority}
-                    />
-                  </motion.div>
-                ))
-              ) : (
-                <div className="col-span-full py-12 text-center border border-dashed border-border/30 rounded-3xl bg-surface/10">
-                   <p className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest italic">All systems clear. No critical items detected.</p>
+        <div className="md:col-span-7 lg:col-span-8 space-y-4">
+          <div className="flex items-center justify-between mb-4 md:mb-6">
+            <h2 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+              Focus Objectives
+            </h2>
+          </div>
+          
+          {isLoading ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bg-surface/50 border border-border/10 rounded-3xl p-6 h-48 animate-pulse">
+                  <div className="w-20 h-2 bg-zinc-800 rounded-full mb-4" />
+                  <div className="w-full h-4 bg-zinc-800 rounded-full mb-2" />
+                  <div className="w-2/3 h-4 bg-zinc-800 rounded-full" />
                 </div>
+              ))}
+            </div>
+          ) : focusTasks.length > 0 ? (
+            <Reorder.Group
+              axis="y"
+              values={focusTasks}
+              onReorder={(reordered) => handleReorder(reordered)}
+              className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+              as="div"
+            >
+              {focusTasks.map((task) => (
+                <Reorder.Item
+                  key={task.id}
+                  value={task}
+                  whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 50 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  className="cursor-grab active:cursor-grabbing"
+                  as="div"
+                >
+                  <FocusCard
+                    title={task.title}
+                    project={task.projectName}
+                    tier={task.projectTier as any}
+                    duration={task.durationMinutes < 60 ? `${task.durationMinutes}m` : `${Math.floor(task.durationMinutes / 60)}h`}
+                    dueDate={task.dueDate}
+                    isActive={true}
+                    onComplete={() => {
+                      if (completeMutation.isPending) return;
+                      completeMutation.mutate(task);
+                    }}
+                    onDelete={() => {
+                      if (deleteMutation.isPending) return;
+                      deleteMutation.mutate(task.id);
+                    }}
+                    onClick={() => setSelectedTaskId(task.id)}
+                    subtasksCount={task.subtasksCount}
+                    completedSubtasksCount={task.completedSubtasksCount}
+                    projectColor={task.projectColor}
+                  />
+                </Reorder.Item>
+              ))}
+            </Reorder.Group>
+          ) : (
+            <div className="text-center py-24 border border-dashed border-border rounded-3xl text-zinc-600 text-[10px] font-bold uppercase tracking-widest bg-surface/30">
+              All objectives synchronized
+            </div>
+          )}
+        </div>
+
+        <div className="md:col-span-5 lg:col-span-4 space-y-8">
+          {completedToday.length > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                  Recent Momentum
+                </h2>
+                <Link href="/history" className="text-[10px] font-bold text-primary uppercase tracking-widest hover:underline">
+                  View All
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {completedToday.map((task: any) => (
+                  <div key={task.id} className="bg-surface/50 border border-transparent rounded-2xl p-4 flex items-center justify-between group card-shadow hover:border-border/30 transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                        <CheckCircle2 size={16} className="text-emerald-500/50" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-zinc-300 line-clamp-1">{task.title}</p>
+                         <p className="text-[9px] font-bold text-zinc-600 uppercase italic leading-none mt-1.5">{task.projects?.name || 'Inbox'}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-zinc-700 uppercase bg-void/50 px-2 py-1 rounded-lg border border-border/20">{task.est_duration_minutes}m</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <Link 
+            href="/tasks"
+            className={cn(
+              "p-6 bg-surface/30 border border-dashed border-border rounded-3xl block transition-all group hover:border-primary/50 hover:bg-surface/50 card-shadow",
+              adminTasks.length === 0 ? "opacity-30 grayscale" : "opacity-80"
+            )}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] block text-zinc-500 group-hover:text-primary transition-colors">
+                Admin Batch
+              </span>
+              {adminTasks.length > 0 && (
+                <span className="bg-primary/10 text-primary text-[9px] font-bold px-2 py-1 rounded-lg animate-pulse uppercase tracking-widest">
+                  {adminTasks.length} Detected
+                </span>
               )}
             </div>
-          </section>
-
-          {/* Section: Ongoing Flow */}
-          <section className="space-y-6">
-            <button 
-              onClick={() => toggleSegment('ongoing')}
-              className="w-full flex items-center justify-between px-1 group"
-            >
-              <h2 className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-3 group-hover:text-zinc-300 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                Active Flow
-              </h2>
-              <div className="flex items-center gap-4">
-                <span className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest bg-void/50 px-3 py-1 rounded-full border border-border/20">
-                  {ongoingTasks.length} Items
-                </span>
-                <ChevronRight size={14} className={cn("text-zinc-600 transition-transform", expandedSegments.ongoing && "rotate-90")} />
-              </div>
-            </button>
-            
-            {expandedSegments.ongoing && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {ongoingTasks.map((task, index) => (
-                  <motion.div
-                    key={task.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.02 }}
-                  >
-                    <FocusCard
-                      title={task.title}
-                      project={task.projectName}
-                      tier={task.projectTier as any}
-                      duration={`${task.durationMinutes}m`}
-                      dueDate={task.dueDate}
-                      isActive={false}
-                      onComplete={() => completeMutation.mutate(task)}
-                      onDelete={() => deleteMutation.mutate(task.id)}
-                      onClick={() => setSelectedTaskId(task.id)}
-                      subtasksCount={task.subtasksCount}
-                      completedSubtasksCount={task.completedSubtasksCount}
-                      projectColor={task.projectColor}
-                      priority={task.priority}
-                    />
-                  </motion.div>
-                ))}
-                {ongoingTasks.length === 0 && (
-                  <div className="col-span-full py-12 text-center border border-dashed border-border/20 rounded-3xl">
-                    <p className="text-[10px] font-bold text-zinc-800 uppercase tracking-widest italic">Flow state optimal. No secondary tasks.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* Section: Inbox */}
-          <section className="space-y-6">
-            <button 
-              onClick={() => toggleSegment('inbox')}
-              className="w-full flex items-center justify-between px-1 group"
-            >
-              <h2 className="text-[11px] font-bold text-zinc-500 uppercase tracking-[0.2em] flex items-center gap-3 group-hover:text-zinc-300 transition-colors">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/40" />
-                Inbox
-              </h2>
-              <div className="flex items-center gap-4">
-                <span className="text-[10px] font-bold text-zinc-700 uppercase tracking-widest bg-void/50 px-3 py-1 rounded-full border border-border/20">
-                  {inboxTasks.length} Entities
-                </span>
-                <ChevronRight size={14} className={cn("text-zinc-600 transition-transform", expandedSegments.inbox && "rotate-90")} />
-              </div>
-            </button>
-            
-            {expandedSegments.inbox && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                 {inboxTasks.map((task, index) => (
-                  <motion.div
-                    key={task.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.02 }}
-                  >
-                    <FocusCard
-                      title={task.title}
-                      project={task.projectName}
-                      tier={task.projectTier as any}
-                      duration={`${task.durationMinutes}m`}
-                      dueDate={task.dueDate}
-                      isActive={false}
-                      onComplete={() => completeMutation.mutate(task)}
-                      onDelete={() => deleteMutation.mutate(task.id)}
-                      onClick={() => setSelectedTaskId(task.id)}
-                      subtasksCount={task.subtasksCount}
-                      completedSubtasksCount={task.completedSubtasksCount}
-                      priority={task.priority}
-                    />
-                  </motion.div>
-                ))}
-                {inboxTasks.length === 0 && (
-                  <div className="col-span-full py-12 text-center border border-dashed border-border/20 rounded-3xl">
-                    <p className="text-[10px] font-bold text-zinc-800 uppercase tracking-widest italic">Inbox cleared. New ideas welcome.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
+            <div className="text-sm font-medium text-zinc-500 leading-relaxed group-hover:text-zinc-300 transition-colors">
+               {adminTasks.length > 0 
+                ? `${adminTasks.length} micro-tasks aggregated. Click to process fragmented subtasks.` 
+                : "System stability optimal. No fragmentation detected."}
+            </div>
+          </Link>
         </div>
       </div>
 

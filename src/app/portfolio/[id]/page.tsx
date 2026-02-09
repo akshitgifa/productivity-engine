@@ -13,7 +13,7 @@ import { Clock, TrendingUp, Zap, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { mapTaskData, Task } from "@/lib/engine";
 import { getProjectColor, hexToRgba, PRESET_COLORS } from "@/lib/colors";
 
@@ -91,6 +91,7 @@ export default function ProjectDetailPage() {
         .from('tasks')
         .select('*, subtasks(is_completed)')
         .eq('project_id', id)
+        .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false });
       return (data || []).map(mapTaskData);
     },
@@ -248,6 +249,26 @@ export default function ProjectDetailPage() {
 
   const handleUndo = (taskId: string) => undoMutation.mutate(taskId);
   const handleDeleteTask = (taskId: string) => deleteTaskMutation.mutate(taskId);
+
+  // Reorder handler for project tasks
+  const handleReorderProjectTasks = async (reorderedTasks: Task[]) => {
+    // Optimistic update
+    queryClient.setQueryData(['tasks', 'project', id], (old: Task[] | undefined) => {
+      if (!old) return old;
+      const activeReordered = reorderedTasks.map((t, i) => ({ ...t, sortOrder: i + 1 }));
+      const nonActive = old.filter(t => t.state !== 'Active');
+      return [...activeReordered, ...nonActive];
+    });
+
+    // Persist to Supabase
+    for (let i = 0; i < reorderedTasks.length; i++) {
+      const task = reorderedTasks[i];
+      const newOrder = i + 1;
+      if (task.sortOrder !== newOrder) {
+        await supabase.from('tasks').update({ sort_order: newOrder, updated_at: new Date().toISOString() }).eq('id', task.id);
+      }
+    }
+  };
 
   const selectedTask = (tasks as any[]).find(t => t.id === selectedTaskId);
 
@@ -573,43 +594,87 @@ export default function ProjectDetailPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="grid grid-cols-1 lg:grid-cols-2 gap-4"
               >
-                {tasks.filter(t => activeTab === "History" ? t.state === 'Done' : t.state === activeTab).length > 0 ? (
-                  tasks
-                    .filter(t => activeTab === "History" ? t.state === 'Done' : t.state === activeTab)
-                    .map((task, index) => (
-                    <motion.div
-                      key={task.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
-                      <FocusCard 
-                        title={task.title}
-                        project={project.name}
-                        tier={project.tier as any}
-                        duration={`${task.durationMinutes}m`}
-                        dueDate={task.dueDate}
-                        isActive={task.state === 'Active'}
-                        onUndo={activeTab === 'History' ? () => handleUndo(task.id) : undefined}
-                        onDelete={() => handleDeleteTask(task.id)}
-                        onComplete={task.state === 'Active' ? () => handleComplete(task) : undefined}
-                        onClick={() => setSelectedTaskId(task.id)}
-                        subtasksCount={task.subtasksCount}
-                        completedSubtasksCount={task.completedSubtasksCount}
-                        projectColor={projectColor}
-                      />
-                    </motion.div>
-                  ))
-                ) : (
-                  <div className="col-span-full text-center py-32 bg-surface/30 border border-dashed border-border/50 rounded-3xl">
-                    <div className="w-16 h-16 bg-void/50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-border">
-                      <Brain className="text-zinc-800" size={32} />
+                {(() => {
+                  const tabTasks = tasks.filter(t => activeTab === "History" ? t.state === 'Done' : t.state === activeTab);
+                  if (tabTasks.length === 0) {
+                    return (
+                      <div className="text-center py-32 bg-surface/30 border border-dashed border-border/50 rounded-3xl">
+                        <div className="w-16 h-16 bg-void/50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-border">
+                          <Brain className="text-zinc-800" size={32} />
+                        </div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Zero focus fragments in {activeTab} state</p>
+                      </div>
+                    );
+                  }
+
+                  if (activeTab === 'Active') {
+                    return (
+                      <Reorder.Group
+                        axis="y"
+                        values={tabTasks}
+                        onReorder={(reordered) => handleReorderProjectTasks(reordered)}
+                        className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+                        as="div"
+                      >
+                        {tabTasks.map((task) => (
+                          <Reorder.Item
+                            key={task.id}
+                            value={task}
+                            whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 50 }}
+                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                            className="cursor-grab active:cursor-grabbing"
+                            as="div"
+                          >
+                            <FocusCard 
+                              title={task.title}
+                              project={project.name}
+                              tier={project.tier as any}
+                              duration={`${task.durationMinutes}m`}
+                              dueDate={task.dueDate}
+                              isActive={true}
+                              onDelete={() => handleDeleteTask(task.id)}
+                              onComplete={() => handleComplete(task)}
+                              onClick={() => setSelectedTaskId(task.id)}
+                              subtasksCount={task.subtasksCount}
+                              completedSubtasksCount={task.completedSubtasksCount}
+                              projectColor={projectColor}
+                            />
+                          </Reorder.Item>
+                        ))}
+                      </Reorder.Group>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {tabTasks.map((task, index) => (
+                        <motion.div
+                          key={task.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <FocusCard 
+                            title={task.title}
+                            project={project.name}
+                            tier={project.tier as any}
+                            duration={`${task.durationMinutes}m`}
+                            dueDate={task.dueDate}
+                            isActive={task.state === 'Active'}
+                            onUndo={activeTab === 'History' ? () => handleUndo(task.id) : undefined}
+                            onDelete={() => handleDeleteTask(task.id)}
+                            onComplete={task.state === 'Active' ? () => handleComplete(task) : undefined}
+                            onClick={() => setSelectedTaskId(task.id)}
+                            subtasksCount={task.subtasksCount}
+                            completedSubtasksCount={task.completedSubtasksCount}
+                            projectColor={projectColor}
+                          />
+                        </motion.div>
+                      ))}
                     </div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Zero focus fragments in {activeTab} state</p>
-                  </div>
-                )}
+                  );
+                })()}
               </motion.div>
             </AnimatePresence>
           </section>

@@ -82,15 +82,13 @@ export function getTools(supabase: SupabaseClient, google: any) {
         state: z.enum(['Active', 'Waiting', 'Blocked', 'Done']).optional(),
         query: z.string().optional().describe('Search term for task title'),
         limit: z.number().default(20),
-        priority: z.number().min(0).max(5).optional().describe('Filter by priority (0-5)'),
       }),
-      execute: async ({ projectId, state, query, limit, priority }: any) => {
+      execute: async ({ projectId, state, query, limit }: any) => {
         try {
-          console.log(`[AI TOOLS] >> EXECUTE list_tasks:`, { projectId, state, query, priority });
+          console.log(`[AI TOOLS] >> EXECUTE list_tasks:`, { projectId, state, query });
           let builder = supabase.from('tasks').select('*, projects(name)');
           if (projectId) builder = builder.eq('project_id', projectId);
           if (state) builder = builder.eq('state', state);
-          if (priority !== undefined) builder = builder.eq('priority', priority);
           if (query) builder = builder.ilike('title', `%${query}%`);
           const { data, error } = await builder.limit(limit).order('created_at', { ascending: false });
           if (error) {
@@ -115,7 +113,6 @@ export function getTools(supabase: SupabaseClient, google: any) {
         due_date: z.string().optional().describe('ISO timestamp or YYYY-MM-DD'),
         est_duration_minutes: z.number().default(30),
         energy_tag: z.enum(['Grind', 'Creative', 'Shallow']).default('Shallow'),
-        priority: z.number().min(0).max(5).default(0).describe('Task priority (P0-P5, P0 is default)'),
       }),
       execute: async (taskData: any) => {
         try {
@@ -125,7 +122,7 @@ export function getTools(supabase: SupabaseClient, google: any) {
           const sanitizedDueDate = taskData.due_date && taskData.due_date.trim() !== '' 
             ? new Date(taskData.due_date).toISOString() 
             : null;
- 
+
           const { data, error } = await supabase.from('tasks').insert({
             title: taskData.title,
             project_id: taskData.projectId,
@@ -134,7 +131,6 @@ export function getTools(supabase: SupabaseClient, google: any) {
             due_date: sanitizedDueDate,
             est_duration_minutes: taskData.est_duration_minutes,
             energy_tag: taskData.energy_tag,
-            priority: taskData.priority,
           }).select('*, projects(name)').single();
           
           if (error) {
@@ -163,7 +159,6 @@ export function getTools(supabase: SupabaseClient, google: any) {
         description: z.string().optional(),
         due_date: z.string().optional(),
         energy_tag: z.enum(['Grind', 'Creative', 'Shallow']).optional(),
-        priority: z.number().min(0).max(5).optional(),
       }),
       execute: async ({ id, ...updates }: any) => {
         console.log(`[AI TOOLS] >> EXECUTE update_task:`, { id, updates });

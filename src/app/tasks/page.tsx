@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 import { mapTaskData } from "@/lib/engine";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, Reorder } from "framer-motion";
 import { Task } from "@/lib/engine";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -30,7 +30,14 @@ export default function TasksPage() {
         .equals('Active')
         .toArray();
       
-      const sorted = allTasks.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      const sorted = allTasks.sort((a, b) => {
+        // Primary: sort_order ascending
+        const orderA = a.sort_order ?? 0;
+        const orderB = b.sort_order ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        // Tiebreaker: newest first
+        return b.created_at.localeCompare(a.created_at);
+      });
       
       return await Promise.all(sorted.map(async (t) => {
         const projects = t.project_id ? await db.projects.get(t.project_id) : null;
@@ -39,6 +46,24 @@ export default function TasksPage() {
     },
     staleTime: 1000 * 60 * 5,
   });
+
+  // Reorder handler
+  const handleReorder = async (reorderedTasks: Task[]) => {
+    // Optimistic UI update
+    queryClient.setQueryData(['tasks', 'active'], reorderedTasks.map((t, i) => ({ ...t, sortOrder: i + 1 })));
+    
+    // Persist to Dexie + outbox
+    for (let i = 0; i < reorderedTasks.length; i++) {
+      const task = reorderedTasks[i];
+      const newOrder = i + 1;
+      if (task.sortOrder !== newOrder) {
+        const update = { sort_order: newOrder, updated_at: new Date().toISOString() };
+        await db.tasks.update(task.id, update);
+        await db.recordAction('tasks', 'update', { id: task.id, ...update });
+      }
+    }
+    processOutbox().catch(() => {});
+  };
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
@@ -197,22 +222,41 @@ export default function TasksPage() {
                   </div>
                 </div>
              ))
-          ) : filteredTasks.map((task: any) => (
-            <FocusCard 
-              key={task.id}
-              title={task.title}
-              project={task.projectName}
-              tier={task.projectTier as any}
-              duration={`${task.durationMinutes}m`}
-              dueDate={task.dueDate}
-              isActive={task.state === 'Active'}
-              onComplete={() => handleComplete(task)}
-              onDelete={() => handleDelete(task.id)}
-              onClick={() => setSelectedTaskId(task.id)}
-              subtasksCount={task.subtasksCount}
-              completedSubtasksCount={task.completedSubtasksCount}
-            />
-          ))}
+          ) : (
+            <Reorder.Group
+              axis="y"
+              values={filteredTasks}
+              onReorder={(reordered) => handleReorder(reordered)}
+              className="col-span-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              as="div"
+            >
+              {filteredTasks.map((task: any) => (
+                <Reorder.Item
+                  key={task.id}
+                  value={task}
+                  whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 50 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  className="cursor-grab active:cursor-grabbing"
+                  as="div"
+                >
+                  <FocusCard 
+                    key={task.id}
+                    title={task.title}
+                    project={task.projectName}
+                    tier={task.projectTier as any}
+                    duration={`${task.durationMinutes}m`}
+                    dueDate={task.dueDate}
+                    isActive={task.state === 'Active'}
+                    onComplete={() => handleComplete(task)}
+                    onDelete={() => handleDelete(task.id)}
+                    onClick={() => setSelectedTaskId(task.id)}
+                    subtasksCount={task.subtasksCount}
+                    completedSubtasksCount={task.completedSubtasksCount}
+                  />
+                </Reorder.Item>
+              ))}
+            </Reorder.Group>
+          )}
         </div>
 
         {filteredTasks.length === 0 && !isLoading && (

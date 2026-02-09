@@ -19,7 +19,6 @@ interface FocusCardProps {
   completedSubtasksCount?: number;
   dueDate?: Date;
   projectColor?: string;
-  priority?: number;
 }
 
 const TIER_COLORS = {
@@ -42,8 +41,7 @@ export function FocusCard({
   subtasksCount = 0,
   completedSubtasksCount = 0,
   dueDate,
-  projectColor,
-  priority = 0
+  projectColor
 }: FocusCardProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const x = useMotionValue(0);
@@ -84,17 +82,6 @@ export function FocusCard({
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest leading-none">
             {project}
           </span>
-          {priority > 0 && (
-            <span 
-              className={cn(
-                "text-[9px] font-black px-1.5 py-0.5 rounded-md border tracking-tighter",
-                priority === 1 ? "bg-rose-500/10 border-rose-500/30 text-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.3)]" :
-                "bg-primary/10 border-primary/30 text-primary"
-              )}
-            >
-              P{priority}
-            </span>
-          )}
         </div>
         
         <div className="flex items-center gap-2">
