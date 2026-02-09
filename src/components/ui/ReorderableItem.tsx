@@ -25,14 +25,14 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
       {/* Drag Handle */}
       <div
         onPointerDown={(e) => controls.start(e)}
-        className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center z-10 cursor-grab active:cursor-grabbing touch-none opacity-0 group-hover/reorder:opacity-100 transition-opacity md:opacity-0 sm:opacity-40"
+        className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center z-10 cursor-grab active:cursor-grabbing touch-none opacity-40 md:opacity-0 md:group-hover/reorder:opacity-100 transition-opacity"
         style={{ touchAction: "none" }}
       >
         <div className="w-6 h-10 rounded-lg bg-white/5 backdrop-blur-sm flex items-center justify-center border border-white/10">
           <GripVertical size={14} className="text-zinc-500" />
         </div>
       </div>
-      <div className="pl-0 group-hover/reorder:pl-8 transition-all duration-200 sm:pl-8">
+      <div className="pl-8 md:pl-0 md:group-hover/reorder:pl-8 transition-all duration-200">
         {children}
       </div>
     </Reorder.Item>
