@@ -30,8 +30,9 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
 
     holdTimerRef.current = setTimeout(() => {
       isDragActivated.current = true;
-      // Visual feedback: subtle pulse
+      // Disable browser touch handling so framer-motion takes over
       if (itemRef.current) {
+        itemRef.current.style.touchAction = 'none';
         itemRef.current.style.transform = 'scale(1.02)';
         itemRef.current.style.boxShadow = '0 10px 40px rgba(0,0,0,0.3)';
         itemRef.current.style.zIndex = '50';
@@ -58,6 +59,7 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
     clearHoldTimer();
     isDragActivated.current = false;
     if (itemRef.current) {
+      itemRef.current.style.touchAction = '';
       itemRef.current.style.transform = '';
       itemRef.current.style.boxShadow = '';
       itemRef.current.style.zIndex = '';
@@ -81,7 +83,6 @@ export function ReorderableItem<T>({ value, children }: ReorderableItemProps<T>)
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         className="transition-all duration-150"
-        style={{ touchAction: "pan-x" }}
       >
         {children}
       </div>
