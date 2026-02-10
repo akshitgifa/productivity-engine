@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Anchor, Settings2, Trash2, Edit3, Save, X, Brain } from "lucide-react";
-import { createClient } from "@/lib/supabase";
+import { db } from "@/lib/db";
+import { processOutbox } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import { FocusCard } from "@/components/ui/FocusCard";
@@ -36,7 +37,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 export default function ProjectDetailPage() {
   const { id } = useParams();
   const router = useRouter();
-  const supabase = createClient();
   const queryClient = useQueryClient();
   
   const [isEditing, setIsEditing] = useState(false);
@@ -45,9 +45,7 @@ export default function ProjectDetailPage() {
     tier: 3,
     decay_threshold_days: 15,
     color: "",
-    settings: {
-      enabledMetrics: ["weekly_intensity", "7d_velocity", "focus_consistency", "deep_work_ratio"]
-    }
+    settings: { enabledMetrics: ["weekly_intensity", "7d_velocity", "focus_consistency", "deep_work_ratio"] }
   });
   const [isEditingContext, setIsEditingContext] = useState(false);
   const [contextInput, setContextInput] = useState("");
@@ -56,44 +54,35 @@ export default function ProjectDetailPage() {
   const { completeTask } = useTaskFulfillment();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
-  // 1. Fetch Project Query
+  // 1. Fetch Project Query from Dexie
   const { data: project, isLoading: isProjectLoading } = useQuery<Project>({
     queryKey: ['projects', id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', id)
-        .single();
+      const data = await db.projects.get(id as string);
       return data as Project;
     },
     enabled: !!id
   });
 
-  // 2. Fetch Context Card Query
+  // 2. Fetch Context Card Query from Dexie
   const { data: contextCard } = useQuery({
     queryKey: ['context_cards', id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('context_cards')
-        .select('*')
-        .eq('project_id', id)
-        .single();
-      if (error && error.code !== 'PGRST116') throw error;
-      return data;
+      const data = await db.context_cards.where('project_id').equals(id as string).first();
+      return data || null;
     },
     enabled: !!id
   });
 
-  // 3. Fetch Project Tasks Query
+  // 3. Fetch Project Tasks Query from Dexie
   const { data: tasks = [], isLoading: isTasksLoading } = useQuery<Task[]>({
     queryKey: ['tasks', 'project', id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('tasks')
-        .select('*, subtasks(is_completed)')
-        .eq('project_id', id);
-      const mapped = (data || []).map(mapTaskData);
+      const rawTasks = await db.tasks
+        .where('project_id')
+        .equals(id as string)
+        .toArray();
+      const mapped = rawTasks.map((t) => mapTaskData(t as any));
       return sortTasksByUserOrder(mapped, 'Deep Work');
     },
     enabled: !!id
@@ -119,15 +108,17 @@ export default function ProjectDetailPage() {
   // 4. Mutations
   const undoMutation = useMutation<void, Error, string>({
     mutationFn: async (taskId) => {
-      await supabase
-        .from('activity_logs')
-        .delete()
-        .eq('task_id', taskId);
-
-      await supabase
-        .from('tasks')
-        .update({ state: 'Active', updated_at: new Date().toISOString() })
-        .eq('id', taskId);
+      // Delete activity logs for this task
+      const logs = await db.activity_logs.where('task_id').equals(taskId).toArray();
+      for (const log of logs) {
+        await db.activity_logs.delete(log.id);
+        await db.recordAction('activity_logs', 'delete', { id: log.id });
+      }
+      // Set task back to Active
+      const update = { state: 'Active' as const, updated_at: new Date().toISOString() };
+      await db.tasks.update(taskId, update);
+      await db.recordAction('tasks', 'update', { id: taskId, ...update });
+      processOutbox().catch(() => {});
     },
     onMutate: async (taskId) => {
       await queryClient.cancelQueries({ queryKey: ['tasks', 'project', id] });
@@ -193,11 +184,9 @@ export default function ProjectDetailPage() {
 
   const deleteProjectMutation = useMutation<void, Error, string>({
     mutationFn: async (projectId) => {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', projectId);
-      if (error) throw error;
+      await db.projects.delete(projectId);
+      await db.recordAction('projects', 'delete', { id: projectId });
+      processOutbox().catch(() => {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -207,14 +196,18 @@ export default function ProjectDetailPage() {
 
   const updateContextMutation = useMutation({
     mutationFn: async (content: string) => {
-      const { error } = await supabase
-        .from('context_cards')
-        .upsert({ 
-          project_id: id as string, 
-          content, 
-          updated_at: new Date().toISOString() 
-        });
-      if (error) throw error;
+      const existing = await db.context_cards.where('project_id').equals(id as string).first();
+      const now = new Date().toISOString();
+      if (existing) {
+        const update = { content, updated_at: now };
+        await db.context_cards.update(existing.id, update);
+        await db.recordAction('context_cards', 'update', { id: existing.id, ...update });
+      } else {
+        const newCard = { id: crypto.randomUUID(), project_id: id as string, content, updated_at: now };
+        await db.context_cards.add(newCard);
+        await db.recordAction('context_cards', 'insert', newCard);
+      }
+      processOutbox().catch(() => {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['context_cards', id] });
@@ -229,15 +222,12 @@ export default function ProjectDetailPage() {
   };
 
   const handleUpdateProject = async () => {
-    const { error } = await supabase
-      .from('projects')
-      .update({ ...editForm, updated_at: new Date().toISOString() })
-      .eq('id', id);
-    
-    if (!error) {
-      queryClient.invalidateQueries({ queryKey: ['projects', id] });
-      setIsEditing(false);
-    }
+    const update = { ...editForm, updated_at: new Date().toISOString() };
+    await db.projects.update(id as string, update);
+    await db.recordAction('projects', 'update', { id, ...update });
+    processOutbox().catch(() => {});
+    queryClient.invalidateQueries({ queryKey: ['projects', id] });
+    setIsEditing(false);
   };
 
   const handleUndo = (taskId: string) => undoMutation.mutate(taskId);

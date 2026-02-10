@@ -58,8 +58,24 @@ export interface Note {
   task_id?: string;
   title: string;
   content: string;
+  is_read?: boolean;
   sort_order: number;
   created_at: string;
+  updated_at: string;
+}
+
+export interface Subtask {
+  id: string;
+  task_id: string;
+  title: string;
+  is_completed: boolean;
+  created_at: string;
+}
+
+export interface ContextCard {
+  id: string;
+  project_id: string;
+  content: string;
   updated_at: string;
 }
 
@@ -70,6 +86,8 @@ export class EntropyDatabase extends Dexie {
   tasks!: Table<Task>;
   activity_logs!: Table<ActivityLog>;
   notes!: Table<Note>;
+  subtasks!: Table<Subtask>;
+  context_cards!: Table<ContextCard>;
   sync_outbox!: Table<SyncOutbox>;
 
   constructor() {
@@ -79,6 +97,15 @@ export class EntropyDatabase extends Dexie {
       tasks: 'id, project_id, state, due_date, sort_order',
       activity_logs: 'id, task_id, project_id',
       notes: 'id, project_id, task_id, sort_order',
+      sync_outbox: '++id, timestamp'
+    });
+    this.version(5).stores({
+      projects: 'id, name, last_touched_at',
+      tasks: 'id, project_id, state, due_date, sort_order',
+      activity_logs: 'id, task_id, project_id',
+      notes: 'id, project_id, task_id, sort_order, is_read',
+      subtasks: 'id, task_id',
+      context_cards: 'id, project_id',
       sync_outbox: '++id, timestamp'
     });
   }

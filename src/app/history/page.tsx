@@ -1,16 +1,17 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { CheckCircle2, Calendar, Anchor, ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
-import { createClient } from "@/lib/supabase";
+import React from "react";
+import { CheckCircle2, RotateCcw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
+import { db } from "@/lib/db";
+import { processOutbox } from "@/lib/sync";
+import { taskService } from "@/lib/taskService";
 
 interface CompletedTask {
   id: string;
   title: string;
   updated_at: string;
-  project_id: string;
+  project_id?: string;
   project_name: string;
   est_duration_minutes: number;
 }
@@ -18,34 +19,27 @@ interface CompletedTask {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 export default function HistoryPage() {
-  const supabase = createClient();
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['history'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select(`
-          id,
-          title,
-          updated_at,
-          project_id,
-          est_duration_minutes,
-          projects ( name )
-        `)
-        .eq('state', 'Done')
-        .order('updated_at', { ascending: false });
+      const doneTasks = await db.tasks
+        .where('state')
+        .equals('Done')
+        .toArray();
 
-      if (error) {
-        console.error("Error fetching history:", error);
-        throw new Error(error.message);
-      }
+      const sorted = doneTasks.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
-      return data?.map((t: any) => ({
-        ...t,
-        project_name: t.projects?.name || 'Orbit'
-      })) || [];
+      return await Promise.all(
+        sorted.map(async (t) => {
+          const project = t.project_id ? await db.projects.get(t.project_id) : null;
+          return {
+            ...t,
+            project_name: project?.name || 'Orbit'
+          };
+        })
+      );
     }
   });
 
@@ -53,15 +47,17 @@ export default function HistoryPage() {
 
   const undoMutation = useMutation<void, Error, string, { previous: CompletedTask[] | undefined }>({
     mutationFn: async (taskId) => {
-      await supabase
-        .from('activity_logs')
-        .delete()
-        .eq('task_id', taskId);
-
-      await supabase
-        .from('tasks')
-        .update({ state: 'Active', updated_at: new Date().toISOString() })
-        .eq('id', taskId);
+      // Delete activity logs for this task
+      const logs = await db.activity_logs.where('task_id').equals(taskId).toArray();
+      for (const log of logs) {
+        await db.activity_logs.delete(log.id);
+        await db.recordAction('activity_logs', 'delete', { id: log.id });
+      }
+      // Set task back to Active
+      const update = { state: 'Active' as const, updated_at: new Date().toISOString() };
+      await db.tasks.update(taskId, update);
+      await db.recordAction('tasks', 'update', { id: taskId, ...update });
+      processOutbox().catch(() => {});
     },
     onMutate: async (taskId) => {
       await queryClient.cancelQueries({ queryKey: ['history'] });
@@ -81,15 +77,7 @@ export default function HistoryPage() {
 
   const deleteMutation = useMutation<void, Error, string, { previous: CompletedTask[] | undefined }>({
     mutationFn: async (taskId) => {
-      await supabase
-        .from('activity_logs')
-        .delete()
-        .eq('task_id', taskId);
-
-      await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
+      await taskService.delete(taskId);
     },
     onMutate: async (taskId) => {
       await queryClient.cancelQueries({ queryKey: ['history'] });
@@ -108,23 +96,6 @@ export default function HistoryPage() {
 
   const handleUndo = (id: string) => undoMutation.mutate(id);
   const handleDelete = (id: string) => deleteMutation.mutate(id);
-
-  // Realtime subscription for instant updates
-  useEffect(() => {
-    const channel = supabase
-      .channel('history-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['history'] });
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['analytics'] });
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, queryClient]);
 
   return (
     <div className="px-6 pt-12 pb-32 max-w-md md:max-w-6xl mx-auto">

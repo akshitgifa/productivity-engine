@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, List, FolderOpen, BarChart3, LogOut, Sparkles, Book, Star, BookOpen, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase";
+import { db } from "@/lib/db";
+import { processOutbox } from "@/lib/sync";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { db } from "@/lib/db";
 
 const NAV_ITEMS = [
   { label: "Focus", href: "/", icon: Home },
@@ -28,69 +28,56 @@ export function Navigation() {
   const isChat = pathname === '/chat';
   
   const queryClient = useQueryClient();
-  const supabase = createClient();
 
-  // Query for unread thoughts
+  // Query for unread thoughts from Dexie
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['unread_thoughts'],
     queryFn: async () => {
-      const { count } = await supabase
-        .from('notes')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_read', false);
-      return count || 0;
+      const count = await db.notes
+        .filter(n => n.is_read === false)
+        .count();
+      return count;
     },
-    refetchInterval: 30000, // Poll every 30 seconds
+    refetchInterval: 30000,
     enabled: !isChat
   });
 
   const handlePrefetch = (href: string) => {
-    // ... existing prefetch logic remains the same
     if (href === "/history") {
       queryClient.prefetchQuery({
         queryKey: ['history'],
         queryFn: async () => {
-          const { data } = await supabase
-            .from('tasks')
-            .select('id, title, updated_at, project_id, est_duration_minutes, projects(name)')
-            .eq('state', 'Done')
-            .order('updated_at', { ascending: false });
-          return (data || []).map((t: any) => ({
-            ...t,
-            project_name: t.projects?.name || 'Inbox'
-          }));
+          const doneTasks = await db.tasks.where('state').equals('Done').toArray();
+          return await Promise.all(
+            doneTasks.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map(async (t) => {
+              const project = t.project_id ? await db.projects.get(t.project_id) : null;
+              return { ...t, project_name: project?.name || 'Inbox' };
+            })
+          );
         }
       });
     } else if (href === "/notes") {
       queryClient.prefetchQuery({
         queryKey: ['notes'],
         queryFn: async () => {
-          const { data } = await supabase.from('notes').select('*, projects(name, color)').order('updated_at', { ascending: false });
-          return data || [];
+          const notes = await db.notes.toArray();
+          return notes.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
         }
       });
     } else if (href === "/portfolio") {
       queryClient.prefetchQuery({
         queryKey: ['projects'],
         queryFn: async () => {
-          const { data } = await supabase.from('projects').select('*').order('tier', { ascending: true });
-          return data || [];
+          const projects = await db.projects.toArray();
+          return projects.sort((a, b) => a.tier - b.tier);
         }
       });
     } else if (href === "/") {
       queryClient.prefetchQuery({
         queryKey: ['tasks', 'active'],
         queryFn: async () => {
-          const { data } = await supabase
-            .from('tasks')
-            .select(`
-              id, title, project_id, due_date, est_duration_minutes, energy_tag,
-              last_touched_at, recurrence_interval_days,
-              projects(name, tier, decay_threshold_days)
-            `)
-            .eq('state', 'Active')
-            .order('created_at', { ascending: false });
-          return (data || []).map(mapTaskData);
+          const activeTasks = await db.tasks.where('state').equals('Active').toArray();
+          return activeTasks.map((t: any) => mapTaskData(t));
         }
       });
     }
@@ -182,29 +169,31 @@ export function Navigation() {
 
 // Catch Up Overlay Component
 function CatchUpOverlay({ onClose }: { onClose: () => void }) {
-  const supabase = createClient();
   const queryClient = useQueryClient();
 
   const { data: thoughts = [], isLoading } = useQuery({
     queryKey: ['unread_thoughts_list'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('is_read', false)
-        .order('created_at', { ascending: false });
-      return data || [];
+      const unread = await db.notes.filter(n => n.is_read === false).toArray();
+      return unread.sort((a, b) => b.created_at.localeCompare(a.created_at));
     }
   });
 
   const markAsRead = async (id: string) => {
-    await supabase.from('notes').update({ is_read: true }).eq('id', id);
+    await db.notes.update(id, { is_read: true });
+    await db.recordAction('notes', 'update', { id, is_read: true });
+    processOutbox().catch(() => {});
     queryClient.invalidateQueries({ queryKey: ['unread_thoughts'] });
     queryClient.invalidateQueries({ queryKey: ['unread_thoughts_list'] });
   };
 
   const markAllRead = async () => {
-    await supabase.from('notes').update({ is_read: true }).eq('is_read', false);
+    const unread = await db.notes.filter(n => n.is_read === false).toArray();
+    for (const note of unread) {
+      await db.notes.update(note.id, { is_read: true });
+      await db.recordAction('notes', 'update', { id: note.id, is_read: true });
+    }
+    processOutbox().catch(() => {});
     queryClient.invalidateQueries({ queryKey: ['unread_thoughts'] });
     queryClient.invalidateQueries({ queryKey: ['unread_thoughts_list'] });
     onClose();

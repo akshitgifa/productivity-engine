@@ -7,7 +7,6 @@ import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { VoiceVisualizer } from "./VoiceVisualizer";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { db } from "@/lib/db";
 import { processOutbox } from "@/lib/sync";
@@ -34,7 +33,6 @@ export function QuickCaptureDrawer({
   const [thoughtInput, setThoughtInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   
-  const supabase = createClient();
   const queryClient = useQueryClient();
 
   // 1. Fetch Projects Query from local DB

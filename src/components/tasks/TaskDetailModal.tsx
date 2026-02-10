@@ -19,7 +19,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase";
+import { db } from "@/lib/db";
+import { processOutbox } from "@/lib/sync";
 import { taskService } from "@/lib/taskService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TaskNote, Subtask } from "@/types/database";
@@ -39,7 +40,6 @@ interface TaskDetailModalProps {
 }
 
 export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps) {
-  const supabase = createClient(); // Still used for subtasks, notes (not in Dexie)
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"notes" | "subtasks" | "strategize">("notes");
   const [newSubtask, setNewSubtask] = useState("");
@@ -57,12 +57,11 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
   const [editedSubtaskTitle, setEditedSubtaskTitle] = useState("");
   const [editedRecurrence, setEditedRecurrence] = useState((task.recurrenceIntervalDays || "").toString());
 
-  // Fetch Projects for selector
+  // Fetch Projects from Dexie
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
-      const { data } = await supabase.from('projects').select('id, name, color');
-      return data || [];
+      return await db.projects.toArray();
     },
     enabled: isOpen
   });
@@ -109,44 +108,38 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
 
   const addSubtaskMutation = useMutation({
     mutationFn: async (title: string) => {
-      await supabase.from("subtasks").insert({ task_id: task.id, title });
+      const newSubtask = {
+        id: crypto.randomUUID(),
+        task_id: task.id,
+        title,
+        is_completed: false,
+        created_at: new Date().toISOString()
+      };
+      await db.subtasks.add(newSubtask);
+      await db.recordAction('subtasks', 'insert', newSubtask);
+      processOutbox().catch(() => {});
     },
-    onMutate: async (title) => {
-      await queryClient.cancelQueries({ queryKey: ["tasks", task.id, "subtasks"] });
-      const previous = queryClient.getQueryData<Subtask[]>(["tasks", task.id, "subtasks"]);
-      const optimistic = { id: Math.random().toString(), task_id: task.id, title, is_completed: false, created_at: new Date().toISOString() };
-      queryClient.setQueryData(["tasks", task.id, "subtasks"], [...(previous || []), optimistic]);
-      return { previous };
-    },
-    onError: (err, variables, context) => queryClient.setQueryData(["tasks", task.id, "subtasks"], context?.previous),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "subtasks"] }),
     onSuccess: () => setNewSubtask(""),
   });
 
   const updateSubtaskMutation = useMutation({
     mutationFn: async ({ id, title, is_completed }: { id: string; title?: string; is_completed?: boolean }) => {
-      await supabase.from("subtasks").update({ title, is_completed }).eq("id", id);
-    },
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: ["tasks", task.id, "subtasks"] });
-      const previous = queryClient.getQueryData<Subtask[]>(["tasks", task.id, "subtasks"]);
-      queryClient.setQueryData(["tasks", task.id, "subtasks"], (old: any) => 
-        old?.map((st: any) => st.id === variables.id ? { ...st, ...variables } : st)
-      );
-      return { previous };
+      const update: Record<string, any> = {};
+      if (title !== undefined) update.title = title;
+      if (is_completed !== undefined) update.is_completed = is_completed;
+      await db.subtasks.update(id, update);
+      await db.recordAction('subtasks', 'update', { id, ...update });
+      processOutbox().catch(() => {});
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "subtasks"] }),
   });
 
   const deleteSubtaskMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("subtasks").delete().eq("id", id);
-    },
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ["tasks", task.id, "subtasks"] });
-      const previous = queryClient.getQueryData<Subtask[]>(["tasks", task.id, "subtasks"]);
-      queryClient.setQueryData(["tasks", task.id, "subtasks"], (old: any) => old?.filter((st: any) => st.id !== id));
-      return { previous };
+      await db.subtasks.delete(id);
+      await db.recordAction('subtasks', 'delete', { id });
+      processOutbox().catch(() => {});
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "subtasks"] }),
   });
@@ -154,29 +147,28 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
   const { data: linkedNotes = [], isLoading: isLoadingNotes } = useQuery({
     queryKey: ["tasks", task.id, "notes"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("notes")
-        .select("*")
-        .eq("task_id", task.id)
-        .order("updated_at", { ascending: false });
-      return (data || []) as any[];
+      const notes = await db.notes.where('task_id').equals(task.id).toArray();
+      return notes.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
     },
     enabled: isOpen && activeTab === "strategize",
   });
 
   const createNoteMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await supabase
-        .from("notes")
-        .insert({
-          title: `Strategy for ${task.title}`,
-          content: "",
-          task_id: task.id,
-          project_id: task.projectId,
-        })
-        .select()
-        .single();
-      return data;
+      const newNote = {
+        id: crypto.randomUUID(),
+        title: `Strategy for ${task.title}`,
+        content: "",
+        task_id: task.id,
+        project_id: task.projectId || undefined,
+        sort_order: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      await db.notes.add(newNote);
+      await db.recordAction('notes', 'insert', newNote);
+      processOutbox().catch(() => {});
+      return newNote;
     },
     onSuccess: (newNote) => {
       queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "notes"] });
@@ -254,16 +246,12 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
     return () => clearTimeout(timer);
   }, [editedNote, isEditingNote, task.description, updateTaskMutation.isPending]);
 
-  // Notes and Subtasks queries
+  // Subtasks query from Dexie
   const { data: subtasks = [], isLoading: isLoadingSubtasks } = useQuery({
     queryKey: ["tasks", task.id, "subtasks"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("subtasks")
-        .select("*")
-        .eq("task_id", task.id)
-        .order("created_at", { ascending: true });
-      return (data || []) as Subtask[];
+      const data = await db.subtasks.where('task_id').equals(task.id).toArray();
+      return data.sort((a, b) => a.created_at.localeCompare(b.created_at));
     },
     enabled: isOpen,
   });

@@ -43,7 +43,7 @@ export async function initialSync() {
   console.log('[Sync] Performing initial data fetch...');
   const supabase = createClient();
 
-  const tables = ['projects', 'tasks', 'notes', 'activity_logs'] as const;
+  const tables = ['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards'] as const;
 
   for (const table of tables) {
     const { data, error } = await supabase.from(table).select('*');
