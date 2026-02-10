@@ -192,10 +192,7 @@ export default function NotesPage() {
           axis="y"
           values={filteredNotes}
           onReorder={(reordered) => handleReorderNotes(reordered)}
-          className={cn(
-            "grid gap-4",
-            viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
-          )}
+          className="flex flex-col gap-4"
           as="div"
         >
           {filteredNotes.map((note) => (

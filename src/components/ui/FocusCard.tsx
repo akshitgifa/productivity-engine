@@ -198,7 +198,7 @@ export function FocusCard({
         onDragEnd={handleDragEnd}
         onClick={() => onClick?.()}
         className={cn(
-          "relative bg-surface border rounded-2xl p-5 card-shadow cursor-pointer z-10 touch-pan-y will-change-transform",
+          "relative bg-surface border rounded-2xl p-5 card-shadow cursor-pointer z-10 will-change-transform",
           isDragging ? "transition-none" : "transition-all duration-300",
           isActive ? "bg-surface/90 border-transparent shadow-[0_0_30px_-10px_rgba(0,0,0,0.5)]" : "border-transparent hover:border-border/50",
           !isMobile && "group-hover:border-border/30"

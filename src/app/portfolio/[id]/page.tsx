@@ -615,7 +615,7 @@ export default function ProjectDetailPage() {
                         axis="y"
                         values={tabTasks}
                         onReorder={(reordered) => handleReorderProjectTasks(reordered)}
-                        className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+                        className="flex flex-col gap-4"
                         as="div"
                       >
                         {tabTasks.map((task) => (

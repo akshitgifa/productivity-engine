@@ -391,7 +391,7 @@ export default function Home() {
               axis="y"
               values={focusTasks}
               onReorder={(reordered) => handleReorder(reordered)}
-              className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+              className="flex flex-col gap-4"
               as="div"
             >
               {focusTasks.map((task) => (

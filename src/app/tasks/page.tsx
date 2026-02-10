@@ -228,7 +228,7 @@ export default function TasksPage() {
               axis="y"
               values={filteredTasks}
               onReorder={(reordered) => handleReorder(reordered)}
-              className="col-span-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              className="col-span-full flex flex-col gap-4"
               as="div"
             >
               {filteredTasks.map((task: any) => (
