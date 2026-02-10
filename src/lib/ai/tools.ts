@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { embed } from 'ai';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { applyTaskUpdateRules } from '@/lib/taskService';
 import { searchWeb } from '@/lib/webSearch';
 import { calculateUrgencyScore, mapTaskData, SessionMode } from '@/lib/engine';
 import { createAdminClient } from '@/lib/supabaseAdmin';
@@ -123,7 +124,7 @@ export function getTools(supabase: SupabaseClient, google: any) {
             ? new Date(taskData.due_date).toISOString() 
             : null;
 
-          const { data, error } = await supabase.from('tasks').insert({
+          const insertData = applyTaskUpdateRules({
             title: taskData.title,
             project_id: taskData.projectId,
             description: taskData.description,
@@ -131,7 +132,9 @@ export function getTools(supabase: SupabaseClient, google: any) {
             due_date: sanitizedDueDate,
             est_duration_minutes: taskData.est_duration_minutes,
             energy_tag: taskData.energy_tag,
-          }).select('*, projects(name)').single();
+          });
+
+          const { data, error } = await supabase.from('tasks').insert(insertData).select('*, projects(name)').single();
           
           if (error) {
             console.error(`[AI TOOLS] create_task DB error:`, error);
@@ -162,8 +165,6 @@ export function getTools(supabase: SupabaseClient, google: any) {
       }),
       execute: async ({ id, ...updates }: any) => {
         console.log(`[AI TOOLS] >> EXECUTE update_task:`, { id, updates });
-        // Apply centralized business rules (e.g., deadline → sort_order reset)
-        const { applyTaskUpdateRules } = await import('@/lib/taskService');
         const processed = applyTaskUpdateRules(updates);
         const { data, error } = await supabase.from('tasks').update(processed).eq('id', id).select().single();
         if (error) throw error;
