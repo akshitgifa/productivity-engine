@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { cn, formatTimeRemaining } from "@/lib/utils";
 import { hexToRgba } from "@/lib/colors";
 import { RotateCcw, Trash2, Check, Maximize2, AlertCircle } from "lucide-react";
-import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion";
+import { motion, useMotionValue, useTransform, AnimatePresence, animate } from "framer-motion";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface FocusCardProps {
@@ -66,8 +66,8 @@ export function FocusCard({
     } else if (info.offset.x < -100 && onDelete) {
       onDelete();
     } else {
-      // Snap back to neutral to avoid partially-swiped cards lingering.
-      x.set(0);
+      // Smooth spring snap-back to neutral
+      animate(x, 0, { type: 'spring', stiffness: 500, damping: 30 });
     }
   };
 
@@ -193,7 +193,6 @@ export function FocusCard({
         dragConstraints={{ left: -120, right: 120 }}
         dragElastic={0.15}
         dragMomentum={false}
-        dragSnapToOrigin
         onDragStart={() => setIsDragging(true)}
         onDragEnd={handleDragEnd}
         onClick={() => onClick?.()}
