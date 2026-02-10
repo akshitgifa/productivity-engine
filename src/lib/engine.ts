@@ -107,14 +107,64 @@ export function sortTasksByUrgency(tasks: Task[], currentMode: SessionMode): Tas
 }
 
 /**
- * Sort tasks by user-defined order (sort_order ascending).
- * Tasks with the same sort_order are tie-broken by urgency (higher urgency first).
+ * Sort tasks with deadline-aware ordering:
+ * 1. Tasks WITH deadlines → above non-deadlined tasks
+ * 2. Among deadlined: manual sort_order (if explicitly set) > deadline order (soonest first)
+ * 3. Tasks WITHOUT deadlines → sorted by manual sort_order (ascending)
+ * 4. Tiebreaker → urgency score (higher first)
+ *
+ * Key insight: sort_order 0 = "unranked" (default). When a user sets a deadline,
+ * sort_order resets to 0 so it enters deadline-sorted pool. When the user drags
+ * to reorder, sort_order gets a real value (>0) that overrides deadline ordering.
  */
 export function sortTasksByUserOrder(tasks: Task[], currentMode: SessionMode): Task[] {
   return [...tasks].sort((a, b) => {
-    // Primary: user-defined order (ascending — lower number = higher position)
-    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+    const aHasDeadline = !!a.dueDate;
+    const bHasDeadline = !!b.dueDate;
+
+    // Layer 1: Deadlined tasks always above non-deadlined
+    if (aHasDeadline && !bHasDeadline) return -1;
+    if (!aHasDeadline && bHasDeadline) return 1;
+
+    // Layer 2: Among deadlined tasks
+    if (aHasDeadline && bHasDeadline) {
+      const aManual = a.sortOrder > 0;
+      const bManual = b.sortOrder > 0;
+
+      // Both manually ordered → respect drag order
+      if (aManual && bManual) {
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      }
+      // One manual, one default → manual comes first (user explicitly placed it)
+      if (aManual && !bManual) return -1;
+      if (!aManual && bManual) return 1;
+      // Both unranked → soonest deadline first
+      const deadlineDiff = a.dueDate!.getTime() - b.dueDate!.getTime();
+      if (deadlineDiff !== 0) return deadlineDiff;
+    }
+
+    // Layer 3: Among non-deadlined → manual sort_order ascending
+    if (!aHasDeadline && !bHasDeadline) {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+    }
+
     // Tiebreaker: urgency score (descending — higher urgency first)
     return calculateUrgencyScore(b, currentMode) - calculateUrgencyScore(a, currentMode);
   });
+}
+
+/**
+ * Compact sort_order values for a list of tasks to close gaps (1, 2, 3...).
+ * Returns an array of { id, newSortOrder } for tasks whose sort_order changed.
+ */
+export function compactSortOrder(tasks: { id: string; sortOrder: number }[]): { id: string; newSortOrder: number }[] {
+  const sorted = [...tasks].sort((a, b) => a.sortOrder - b.sortOrder);
+  const updates: { id: string; newSortOrder: number }[] = [];
+  sorted.forEach((t, i) => {
+    const newOrder = i + 1;
+    if (t.sortOrder !== newOrder) {
+      updates.push({ id: t.id, newSortOrder: newOrder });
+    }
+  });
+  return updates;
 }

@@ -32,7 +32,24 @@ export default function TasksPage() {
         .toArray();
       
       const sorted = allTasks.sort((a, b) => {
-        // Primary: sort_order ascending
+        const aHasDeadline = !!a.due_date;
+        const bHasDeadline = !!b.due_date;
+        // Deadlined tasks always above non-deadlined
+        if (aHasDeadline && !bHasDeadline) return -1;
+        if (!aHasDeadline && bHasDeadline) return 1;
+        // Among deadlined: manual sort_order (if set) > deadline order
+        if (aHasDeadline && bHasDeadline) {
+          const orderA = a.sort_order ?? 0;
+          const orderB = b.sort_order ?? 0;
+          const aManual = orderA > 0;
+          const bManual = orderB > 0;
+          if (aManual && bManual && orderA !== orderB) return orderA - orderB;
+          if (aManual && !bManual) return -1;
+          if (!aManual && bManual) return 1;
+          const diff = new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime();
+          if (diff !== 0) return diff;
+        }
+        // Among non-deadlined: sort_order ascending
         const orderA = a.sort_order ?? 0;
         const orderB = b.sort_order ?? 0;
         if (orderA !== orderB) return orderA - orderB;

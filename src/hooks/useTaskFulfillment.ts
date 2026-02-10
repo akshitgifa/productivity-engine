@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { useUserStore } from "@/store/userStore";
 import { processOutbox } from "@/lib/sync";
+import { compactSortOrder } from "@/lib/engine";
 
 export function useTaskFulfillment() {
   const { mode } = useUserStore();
@@ -59,6 +60,23 @@ export function useTaskFulfillment() {
       
       await db.tasks.add(newTask);
       await db.recordAction("tasks", "insert", newTask);
+    }
+
+    // 5. Compact sort_order for remaining active tasks (close gaps)
+    try {
+      const activeTasks = await db.tasks
+        .where('state')
+        .equals('Active')
+        .toArray();
+      const tasksForCompaction = activeTasks.map(t => ({ id: t.id, sortOrder: t.sort_order ?? 0 }));
+      const updates = compactSortOrder(tasksForCompaction);
+      for (const u of updates) {
+        const upd = { sort_order: u.newSortOrder, updated_at: new Date().toISOString() };
+        await db.tasks.update(u.id, upd);
+        await db.recordAction("tasks", "update", { id: u.id, ...upd });
+      }
+    } catch (err) {
+      console.error('[Sort Compaction] Failed:', err);
     }
 
     // Trigger background sync (non-blocking)

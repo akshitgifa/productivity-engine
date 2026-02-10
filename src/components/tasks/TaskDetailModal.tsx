@@ -20,6 +20,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
+import { db } from "@/lib/db";
+import { processOutbox } from "@/lib/sync";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TaskNote, Subtask } from "@/types/database";
 import { Task } from "@/lib/engine";
@@ -38,7 +40,7 @@ interface TaskDetailModalProps {
 }
 
 export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps) {
-  const supabase = createClient();
+  const supabase = createClient(); // Still used for subtasks, notes (not in Dexie)
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"notes" | "subtasks" | "strategize">("notes");
   const [newSubtask, setNewSubtask] = useState("");
@@ -69,10 +71,13 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
   const selectedProject = projects.find(p => p.id === task.projectId);
   const projectColor = getProjectColor(task.projectName, selectedProject?.color);
 
-  // Mutations
+  // Mutations — local-first via Dexie + outbox
   const updateTaskMutation = useMutation({
     mutationFn: async (updates: any) => {
-      await supabase.from("tasks").update(updates).eq("id", task.id);
+      const dbUpdates = { ...updates, updated_at: new Date().toISOString() };
+      await db.tasks.update(task.id, dbUpdates);
+      await db.recordAction('tasks', 'update', { id: task.id, ...dbUpdates });
+      processOutbox().catch(() => {});
     },
     onMutate: async (updates) => {
       justSavedRef.current = true;
@@ -99,7 +104,9 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
 
   const deleteTaskMutation = useMutation({
     mutationFn: async () => {
-      await supabase.from("tasks").delete().eq("id", task.id);
+      await db.tasks.delete(task.id);
+      await db.recordAction('tasks', 'delete', { id: task.id });
+      processOutbox().catch(() => {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
@@ -441,7 +448,7 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
                             value={task.dueDate ? new Date(new Date(task.dueDate).getTime() - new Date(task.dueDate).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ""}
                             onChange={(e) => {
                                 const val = e.target.value;
-                                updateTaskMutation.mutate({ due_date: val ? new Date(val).toISOString() : null });
+                                updateTaskMutation.mutate({ due_date: val ? new Date(val).toISOString() : null, sort_order: 0 });
                             }}
                         />
                     </div>
@@ -462,7 +469,7 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
                         ].map(opt => (
                             <button
                                 key={opt.label || 'none'}
-                                onClick={() => updateTaskMutation.mutate({ due_date: opt.value })}
+                                onClick={() => updateTaskMutation.mutate({ due_date: opt.value, sort_order: 0 })}
                                 className="px-2 py-0.5 rounded-md border border-border/20 text-[8px] font-bold uppercase tracking-widest text-zinc-500 hover:text-primary hover:border-primary/30 transition-all bg-void/30"
                             >
                                 {opt.label}
