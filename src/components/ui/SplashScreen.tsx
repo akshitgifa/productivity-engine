@@ -8,6 +8,17 @@ export function SplashScreen() {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
+    // Check if running in standalone mode (PWA)
+    const isStandalone = 
+      window.matchMedia('(display-mode: standalone)').matches || 
+      (window.navigator as any).standalone || 
+      document.referrer.includes('android-app://');
+
+    if (isStandalone) {
+      setIsVisible(false);
+      return;
+    }
+
     const timer = setTimeout(() => {
       setIsVisible(false);
     }, 400);
@@ -24,19 +35,22 @@ export function SplashScreen() {
           className="fixed inset-0 z-[100] bg-void flex flex-col items-center justify-center"
         >
           <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
+            initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="w-24 h-24 bg-surface border border-primary/20 rounded-3xl flex items-center justify-center mb-8 card-shadow"
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="w-24 h-24 bg-surface border border-white/5 rounded-3xl flex items-center justify-center mb-8"
           >
-            <Terminal className="text-primary" size={40} />
+            <div className="flex items-center gap-1">
+              <span className="text-primary text-4xl font-mono font-bold">&gt;</span>
+              <span className="text-primary text-4xl font-mono font-bold animate-pulse">_</span>
+            </div>
           </motion.div>
           
           <div className="text-center">
             <motion.h1
-              initial={{ y: 20, opacity: 0 }}
+              initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
+              transition={{ delay: 0.1, duration: 0.4 }}
               className="text-4xl font-extrabold tracking-tight text-white mb-4"
             >
               Entropy
@@ -44,10 +58,10 @@ export function SplashScreen() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.5, duration: 1 }}
+              transition={{ delay: 0.3, duration: 0.8 }}
               className="flex items-center justify-center gap-3"
             >
-              <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
+              <div className="w-1 h-1 rounded-full bg-primary" />
               <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.4em]">
                 Quantifying Momentum
               </p>
