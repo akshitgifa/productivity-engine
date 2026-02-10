@@ -36,7 +36,7 @@ type Project = {
   color?: string | null;
 };
 
-type RangePreset = "today" | "last24" | "last7" | "custom";
+type RangePreset = "today" | "last24" | "last7" | "custom" | "duration";
 
 const NAME_STORAGE_KEY = "entropy_share_name";
 const SETTINGS_STORAGE_KEY = "entropy_export_settings";
@@ -45,6 +45,8 @@ type ExportSettings = {
   preset: RangePreset;
   customStart: string;
   customEnd: string;
+  durationValue: number;
+  durationUnit: "hours" | "days";
   displayName: string;
   showTaskList: boolean;
   showProjectNames: boolean;
@@ -89,6 +91,8 @@ export default function ExportPage() {
   const [preset, setPreset] = useState<RangePreset>("today");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const [durationValue, setDurationValue] = useState(1);
+  const [durationUnit, setDurationUnit] = useState<"hours" | "days">("hours");
 
   const [displayName, setDisplayName] = useState("");
   const [cleanView, setCleanView] = useState(false);
@@ -113,6 +117,8 @@ export default function ExportPage() {
         if (parsed.preset) setPreset(parsed.preset);
         if (parsed.customStart) setCustomStart(parsed.customStart);
         if (parsed.customEnd) setCustomEnd(parsed.customEnd);
+        if (parsed.durationValue !== undefined) setDurationValue(parsed.durationValue);
+        if (parsed.durationUnit !== undefined) setDurationUnit(parsed.durationUnit);
         if (parsed.displayName !== undefined) setDisplayName(parsed.displayName);
         if (parsed.showTaskList !== undefined) setShowTaskList(parsed.showTaskList);
         if (parsed.showProjectNames !== undefined) setShowProjectNames(parsed.showProjectNames);
@@ -140,6 +146,8 @@ export default function ExportPage() {
       preset,
       customStart,
       customEnd,
+      durationValue,
+      durationUnit,
       displayName,
       showTaskList,
       showProjectNames,
@@ -156,6 +164,8 @@ export default function ExportPage() {
     preset,
     customStart,
     customEnd,
+    durationValue,
+    durationUnit,
     displayName,
     showTaskList,
     showProjectNames,
@@ -202,10 +212,17 @@ export default function ExportPage() {
       const { start, end } = getLast7Range();
       return { startDate: start, endDate: end, rangeLabel: formatRangeLabel(preset, start, end) };
     }
+    if (preset === "duration") {
+      const end = new Date();
+      const multiplier = durationUnit === "hours" ? 60 : 24 * 60;
+      const start = new Date(end.getTime() - durationValue * multiplier * 60 * 1000);
+      const label = `Past ${durationValue} ${durationUnit}`;
+      return { startDate: start, endDate: end, rangeLabel: label };
+    }
     const start = customStart ? new Date(`${customStart}T00:00:00`) : getTodayRange().start;
     const end = customEnd ? new Date(`${customEnd}T23:59:59`) : new Date();
     return { startDate: start, endDate: end, rangeLabel: formatRangeLabel(preset, start, end) };
-  }, [preset, customStart, customEnd]);
+  }, [preset, customStart, customEnd, durationValue, durationUnit]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects", "export"],
@@ -320,6 +337,7 @@ export default function ExportPage() {
                       { id: "today", label: "Today" },
                       { id: "last24", label: "Last 24h" },
                       { id: "last7", label: "Last 7d" },
+                      { id: "duration", label: "Duration" },
                       { id: "custom", label: "Custom" },
                     ].map((item) => (
                       <button
@@ -356,6 +374,31 @@ export default function ExportPage() {
                           onChange={(event) => setCustomEnd(event.target.value)}
                           className="w-full rounded-xl bg-void border border-border/40 px-3 py-2 text-xs text-white"
                         />
+                      </div>
+                    </div>
+                  )}
+                  {preset === "duration" && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">Value</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={durationValue}
+                          onChange={(event) => setDurationValue(Math.max(1, parseInt(event.target.value) || 1))}
+                          className="w-full rounded-xl bg-void border border-border/40 px-3 py-2 text-xs text-white"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">Unit</label>
+                        <select
+                          value={durationUnit}
+                          onChange={(event) => setDurationUnit(event.target.value as "hours" | "days")}
+                          className="w-full rounded-xl bg-void border border-border/40 px-3 py-2 text-xs text-white"
+                        >
+                          <option value="hours">Hours</option>
+                          <option value="days">Days</option>
+                        </select>
                       </div>
                     </div>
                   )}
