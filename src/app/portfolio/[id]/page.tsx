@@ -15,7 +15,8 @@ import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
-import { mapTaskData, Task } from "@/lib/engine";
+import { mapTaskData, sortTasksByUserOrder, Task } from "@/lib/engine";
+import { taskService } from "@/lib/taskService";
 import { getProjectColor, hexToRgba, PRESET_COLORS } from "@/lib/colors";
 
 interface Project {
@@ -91,10 +92,9 @@ export default function ProjectDetailPage() {
       const { data } = await supabase
         .from('tasks')
         .select('*, subtasks(is_completed)')
-        .eq('project_id', id)
-        .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: false });
-      return (data || []).map(mapTaskData);
+        .eq('project_id', id);
+      const mapped = (data || []).map(mapTaskData);
+      return sortTasksByUserOrder(mapped, 'Deep Work');
     },
     enabled: !!id
   });
@@ -146,15 +146,7 @@ export default function ProjectDetailPage() {
 
   const deleteTaskMutation = useMutation<void, Error, string>({
     mutationFn: async (taskId) => {
-      await supabase
-        .from('activity_logs')
-        .delete()
-        .eq('task_id', taskId);
-
-      await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
+      await taskService.delete(taskId);
     },
     onMutate: async (taskId) => {
       await queryClient.cancelQueries({ queryKey: ['tasks', 'project', id] });
@@ -261,14 +253,9 @@ export default function ProjectDetailPage() {
       return [...activeReordered, ...nonActive];
     });
 
-    // Persist to Supabase
-    for (let i = 0; i < reorderedTasks.length; i++) {
-      const task = reorderedTasks[i];
-      const newOrder = i + 1;
-      if (task.sortOrder !== newOrder) {
-        await supabase.from('tasks').update({ sort_order: newOrder, updated_at: new Date().toISOString() }).eq('id', task.id);
-      }
-    }
+    // Persist via centralized service
+    const orderedIds = reorderedTasks.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
+    await taskService.reorder(orderedIds);
   };
 
   const selectedTask = (tasks as any[]).find(t => t.id === selectedTaskId);

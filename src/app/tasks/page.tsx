@@ -5,7 +5,7 @@ import { FocusCard } from "@/components/ui/FocusCard";
 import { Search, Filter, Trash2, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
-import { mapTaskData } from "@/lib/engine";
+import { mapTaskData, sortTasksByUserOrder } from "@/lib/engine";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { taskService } from '@/lib/taskService';
 import { AnimatePresence, Reorder } from "framer-motion";
@@ -32,36 +32,12 @@ export default function TasksPage() {
         .equals('Active')
         .toArray();
       
-      const sorted = allTasks.sort((a, b) => {
-        const aHasDeadline = !!a.due_date;
-        const bHasDeadline = !!b.due_date;
-        // Deadlined tasks always above non-deadlined
-        if (aHasDeadline && !bHasDeadline) return -1;
-        if (!aHasDeadline && bHasDeadline) return 1;
-        // Among deadlined: manual sort_order (if set) > deadline order
-        if (aHasDeadline && bHasDeadline) {
-          const orderA = a.sort_order ?? 0;
-          const orderB = b.sort_order ?? 0;
-          const aManual = orderA > 0;
-          const bManual = orderB > 0;
-          if (aManual && bManual && orderA !== orderB) return orderA - orderB;
-          if (aManual && !bManual) return -1;
-          if (!aManual && bManual) return 1;
-          const diff = new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime();
-          if (diff !== 0) return diff;
-        }
-        // Among non-deadlined: sort_order ascending
-        const orderA = a.sort_order ?? 0;
-        const orderB = b.sort_order ?? 0;
-        if (orderA !== orderB) return orderA - orderB;
-        // Tiebreaker: newest first
-        return b.created_at.localeCompare(a.created_at);
-      });
-      
-      return await Promise.all(sorted.map(async (t) => {
+      const mapped = await Promise.all(allTasks.map(async (t) => {
         const projects = t.project_id ? await db.projects.get(t.project_id) : null;
         return mapTaskData({ ...t, projects });
       }));
+
+      return sortTasksByUserOrder(mapped, 'Deep Work');
     },
     staleTime: 1000 * 60 * 5,
   });

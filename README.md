@@ -1,98 +1,73 @@
-# Entropy UI | Dynamic Context Engine
+# Entropy | Dynamic Context Engine
 
-**Project Status:** Active Beta (God Mode Enabled)
-**Core Concept:** Probabilistic Scheduling & Dynamic Context
+**Status:** Active Beta  
+**Stack:** Next.js 15 · Supabase · Dexie.js (local-first) · Gemini 2.0 Flash
 
 > *"In an era of infinite distraction, the greatest luxury is focus."*
 
-Entropy is a high-performance context engine designed for power users. It treats potential work as living entities that compete for your attention. By modeling work as **Entropy** (the inevitable decay of neglected priorities), the system ensures that nothing critical slips through the cracks while hiding the clutter that doesn't matter *now*.
+Entropy is a high-performance productivity engine for power users managing multiple projects. It models neglected work as **entropy** — the inevitable decay of unattended priorities — ensuring nothing critical slips through while hiding what doesn't matter *now*.
 
 ---
 
-## 1. The Philosophy
-We have moved away from "Industrial Zen" toward a **High-Performance Minimalism**.
-- **Vibe:** Swiss Design meets Modern IDE. Slate, Charcoal, and targeted Primary accents.
-- **Copy:** Professional and functional. No "gaming" or "pilot cockpit" roleplay.
-- **Typography:** Inter for readability, JetBrains Mono for data-dense numeric tracking.
+## Architecture
 
-### Key Concepts
+### Local-First (Offline-Ready)
+All task mutations go through **`src/lib/taskService.ts`** — a centralized service that writes to Dexie (IndexedDB), records to an outbox, and syncs to Supabase in the background. The app works offline and syncs when connectivity returns.
 
-#### Projects
-Each project is a persistent entity requiring maintenance:
-- **Tier 1-4:** Prioritization level (1 = Urgent, 4 = Maintenance).
-- **Decay Threshold:** The heartbeat of the system. Defines how often a project needs touching before it "rots."
-- **KPIs:** Track real-world impact metrics, not just "tasks completed."
-- **Rejuvenation:** Completing tasks "rejuvenates" project health, preventing decay.
+### Deadline-Aware Sorting
+Tasks are sorted via **`sortTasksByUserOrder()`** in `src/lib/engine.ts`:
+1. **Deadlined tasks** float above non-deadlined tasks
+2. Among deadlined: manual drag order (`sort_order > 0`) overrides deadline sort; unranked tasks sort by soonest deadline
+3. **Non-deadlined tasks** sort by manual drag order
+4. **Urgency score** serves as the final tiebreaker
 
-#### The Dashboard (The "Execution" Algorithm)
-The home screen is a curated list of what to execute *next*, calculated dynamically:
-`Score = (Tier Weight) × (Days Since Last Touch / Decay Threshold) × (Context Multiplier)`
+Setting a deadline resets `sort_order` to 0 (enters deadline pool). Dragging assigns an explicit order that persists.
 
-- **Filters:** By Time Available (15m, 30m, 1h) and Energy Mode (**Deep Work**, **Creative**, **Low Energy**, **Admin**).
-- **Deadlines:** Integrated "Mission Critical" logic for tasks due within 24h.
-- **Zero-Delay Sync:** Powered by Supabase Realtime & TanStack Query for instant feedback.
-
-#### Strategy & Notes (Knowledge Base)
-A dedicated secure archive for strategic dumps, meeting notes, and project brainstorming.
-- **Markdown-First:** Full rich-text editing with a distraction-free interface.
-- **AI Refinement:** "Refine" button to restructure brain dumps into clean, actionable intelligence.
-- **Context Awareness:** Notes can be linked directly to Projects and Tasks for contextual retrieval.
+### Core Modules
+| Module                            | Purpose                                                         |
+| --------------------------------- | --------------------------------------------------------------- |
+| `src/lib/engine.ts`               | Urgency scoring, sorting, sort compaction                       |
+| `src/lib/taskService.ts`          | Centralized task mutations (Dexie + outbox) with business rules |
+| `src/lib/ai/tools.ts`             | AI tool registry (15+ tools with God Mode access)               |
+| `src/hooks/useTaskFulfillment.ts` | Task completion, recurrence, project rejuvenation               |
+| `src/lib/sync.ts`                 | Outbox sync to Supabase                                         |
 
 ---
 
-## 2. Technical Architecture
+## Key Features
 
-### Core Stack
-- **Framework:** Next.js 15+ (App Router)
-- **State/Caching:** TanStack Query (React Query) v5
-- **Database:** Supabase (PostgreSQL + Realtime)
-- **Styling:** Vanilla CSS (Tailwind excluded for flexibility) + Framer Motion
-- **AI:** Google Gemini 2.0 Flash (Multimodal)
-
-### Key Modules
-- **`src/lib/engine.ts`**: The urgency scoring algorithm.
-- **`src/app/api/chat/route.ts`**: The AI Assistant's "God Mode" interface.
-- **`src/hooks/useTaskFulfillment.ts`**: Centralized logic for task completion and project health.
+- **Dashboard**: Curated execution queue sorted by urgency, deadlines, and energy mode
+- **Portfolio**: Per-project task management with health tracking, KPIs, and context cards
+- **AI Assistant**: Multimodal chat (text + voice) with tool access to the full database
+- **Quick Capture**: Voice → transcription → structured task creation in one flow
+- **Notes**: Standalone AI-enhanced knowledge base with markdown editing
+- **Export**: Screenshot-ready progress reports with privacy controls
+- **Smart Recurrence**: Completed recurring tasks auto-spawn with `waiting_until` dates
+- **Subagents**: Background AI workers for parallel research and analysis
 
 ---
 
-## 3. AI & Voice Integration
-Entropy is managed by an active **Intelligence Partner**.
-
-- **AI Assistant**: A high-capability Assistant with "God Mode" access to the engine's database. It can create tasks, manage projects, and analyze performance trends.
-- **Quick Capture**: "Record, Confirm, Done." Voice dumps are parsed into structured JSON by the AI.
-- **Enrichment**: AI-powered transcription for task notes and automated subtask generation.
-
----
-
-## 4. Getting Started
+## Getting Started
 
 ### Prerequisites
 - Node.js 20+
 - pnpm
 
-### Installation
-
+### Setup
 ```bash
-# Install dependencies
 pnpm install
-
-# Setup Environment
 cp .env.example .env.local
-# Add: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, GEMINI_API_KEY, SUPABASE_SERVICE_ROLE_KEY
-
-# Developer Handover
-For the current Phase 2 roadmap and technical architecture details, please refer to:
-- [plan.md](./plan.md) (PRD & Future Logic)
-- [ai_assistant_spec.md](./ai_assistant_spec.md) (AI Assistant & Voice Design)
-
-# Run Development Server
+# Required: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+#           GEMINI_API_KEY, SUPABASE_SERVICE_ROLE_KEY
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Developer References
+- [plan.md](./plan.md) — Roadmap and pending features
+- [ai_assistant_spec.md](./ai_assistant_spec.md) — AI tool catalog and voice interface
+- [docs/](./docs/) — Detailed architecture docs
 
 ---
 
-## 5. Deployment
-The app is optimized for Vercel deployment. It also supports PWA installation (Manifest included) for a native-like mobile experience.
+## Deployment
+Optimized for Vercel. Supports PWA installation for native-like mobile experience.

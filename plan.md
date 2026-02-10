@@ -1,49 +1,45 @@
-# Project Title: Dynamic Context Engine (Productivity App)
+# Entropy Roadmap
 
-## 1. Project Overview
-**Status:** Phase 2 Complete (Deadlines, Advanced Editing, and AI Enrichment implemented).
-**Objective:** Build a high-performance, mobile-first productivity application designed for a power user managing multiple complex projects ("projects") simultaneously.
+> **Status:** Core features complete. Polishing and expanding intelligence capabilities.
 
----
+## Completed
 
-## 2. App Architecture & Navigation
-**Platform:** Next.js 15 (App Router). Responsive web app (PWA).
+- [x] Dashboard with urgency-based execution queue
+- [x] Portfolio with project health, KPIs, and context cards
+- [x] AI Assistant with God Mode tool access (15+ tools)
+- [x] Voice capture → transcription → structured task creation
+- [x] Task enrichment (notes, subtasks, deadlines, recurrence)
+- [x] Notes page with AI refinement and markdown editing
+- [x] Export / screenshot mode with privacy controls
+- [x] Local-first architecture (Dexie + outbox sync)
+- [x] Centralized `taskService.ts` for all task mutations
+- [x] Deadline-aware sorting with manual override
+- [x] Sort compaction on task completion
+- [x] Background subagents for parallel research
+- [x] Web search tool integration
+- [x] Memory system (embeddings + retrieval)
+- [x] Smart recurrence with `waiting_until` scheduling
+- [x] Service Worker caching for instant loads
 
-### **Sitemap:**
-1. **Dashboard** – The execution view (Implemented).
-2. **Projects** – High-level project health tracking (Implemented).
-3. **AI Assistant (Chat)** – "God Mode" AI Assistant (Implemented).
-4. **Task Detail** – Enrichment with notes and subtasks (Implemented).
-5. **Notes** – Standalone AI-enhanced knowledge base (Implemented).
+## Pending
 
----
+### Proactive Intelligence
+- [ ] Decay notifications — AI alerts user about critical project entropy
+- [ ] Dynamic KPI suggestions based on task completion patterns
 
-## 3. Core Functional Logic (Implemented)
+### Execution Optimization
+- [ ] "Admin Hour" mode — batch shallow tasks into focused sprints
+- [ ] Pomodoro integration — timer synced with session modes
 
-### **A. The Sorting Algorithm (The "Dashboard" Logic)**
-`Score = (Tier Weight) × (Days Since Last Touch / Decay Threshold)^1.5 × (Context Multiplier)`
-- **Tier Weights:** 1 (2.0), 2 (1.5), 3 (1.0), 4 (0.5).
-- **Deadline Override:** Tasks due within 24h are forced to the top.
-
-### **B. Project Decay (Entropy)**
-Projects track `last_touched_at`. If the gap exceeds `decay_threshold_days`, the project is considered "Decayed," affecting its tasks' urgency scores.
-
----
-
-## 4. Pending Roadmap: Phase 3 (Cognitive Resonance)
-
-### **1. Proactive Maintenance**
-- [ ] **Decay Notifications**: Implement background jobs (or simple triggers) for the AI Assistant to alert the user about critical project decay.
-- [ ] **Dynamic KPI Suggestions**: AI should suggest new KPIs based on task completion patterns.
-
-### **2. Execution Sprints**
-- [ ] **"Admin Hour" Mode**: Assistant suggests batching all <10m tasks into a single focused sprint.
-- [ ] **Pomodoro Integration**: Sync chat status with a timer for Deep Work sessions.
+### Knowledge Graph
+- [ ] Cross-note linking and backlinks
+- [ ] Contextual assistant scoped to individual notes
 
 ---
 
-## 5. Developer Handover Notes
-- **Supabase**: Real-time enabled on `tasks` and `projects`. Use service role key for system bypass if needed.
-- **AI SDK**: Using Vercel AI SDK with `gemini-2.0-flash`.
-- **Styling**: **Vanilla CSS ONLY**. Do not use Tailwind utility classes; maintain the "High-Performance Minimalism" aesthetic.
-- **Urgency Math**: `src/lib/engine.ts` is the single source of truth.
+## Developer Notes
+- **Supabase**: Real-time on `tasks` and `projects`. Service role key for system bypass.
+- **AI SDK**: Vercel AI SDK with `gemini-2.0-flash`.
+- **Styling**: Vanilla CSS only. No Tailwind.
+- **Sort logic**: `src/lib/engine.ts` → `sortTasksByUserOrder()` is the single source of truth.
+- **Mutations**: `src/lib/taskService.ts` is the single entry point for all task writes.

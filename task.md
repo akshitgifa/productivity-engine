@@ -1,34 +1,33 @@
-# Task: Entropy v2.0 - Second Brain Evolution
+# Entropy Roadmap Task Tracker
 
-> **Status:** Planning Restructure Complete. Ready for Execution.
+> **Status:** Core platform shipped. Active development on intelligence and polish.
 
-## Phase 0: Documentation & Handoff <!-- id: 0 -->
-- [x] Analyze current codebase and capabilities <!-- id: 1 -->
-- [x] Ideate Vision for Entropy v2.0 <!-- id: 2 -->
-- [x] Restructure documentation into modular files (`docs/`) <!-- id: 3 -->
+## Core Platform (Complete)
+- [x] Dashboard with urgency-sorted execution queue
+- [x] Portfolio with project health and decay tracking
+- [x] Task detail modal with notes, subtasks, deadlines
+- [x] AI Assistant with God Mode tools
+- [x] Quick Capture (text + voice)
+- [x] Notes page with AI refinement
+- [x] Export / screenshot mode
+- [x] Analytics / review page
 
-## Phase 1: The Hippocampus (Memory) <!-- id: 4 -->
-*See [docs/02_phases.md](file:///Users/akshit2434/github/productivity-engine/docs/02_phases.md) for details.*
-- [ ] Enable `pgvector` in Supabase <!-- id: 5 -->
-- [ ] Create database migrations for `memories` and `context_cards` <!-- id: 6 -->
-- [ ] Extend `notes` table schema <!-- id: 7 -->
-- [ ] Implement embedding pipeline and memory retrieval logic <!-- id: 8 -->
-- [ ] Build Context Card UI in Project Detail page <!-- id: 9 -->
+## Infrastructure (Complete)
+- [x] Local-first architecture (Dexie + outbox sync)
+- [x] Centralized `taskService.ts` for all mutations
+- [x] Deadline-aware sorting (`sortTasksByUserOrder`)
+- [x] Sort compaction on task completion
+- [x] Service Worker caching
+- [x] Memory system with embeddings (`pgvector`)
+- [x] Context cards per project
+- [x] Background subagents (`spawn_subagents`)
+- [x] Web search tool
+- [x] Smart recurrence with `waiting_until`
 
-## Phase 2: Unstructured Dumps (The Feed) <!-- id: 10 -->
-- [ ] Upgrade Quick Capture with Silent "Thought Mode" <!-- id: 11 -->
-- [ ] Implement "Sparkle" pulse notification in Navigation <!-- id: 12 -->
-- [ ] Build "Catch Up" Overlay UI <!-- id: 13 -->
-
-## Phase 3: Background Intelligence (The Subconscious) <!-- id: 14 -->
-- [ ] Create Subagent Executor logic (Supabase Edge Function) <!-- id: 15 -->
-- [ ] Implement `spawn_subagent` and `search_web` tools <!-- id: 16 -->
-- [ ] Build Real-time Task Panel in Chat <!-- id: 17 -->
-
-## Phase 4: Smart Notes (Temporal Anchors) <!-- id: 18 -->
-- [ ] Implement Regex-based Anchor parser <!-- id: 19 -->
-- [ ] Upgrade Markdown renderer with interactive anchors and checkboxes <!-- id: 20 -->
-
-## Phase 5: Polish & Contextual AI <!-- id: 21 -->
-- [ ] Implement "Contextual Assistant" (Scoped Note Chat) <!-- id: 22 -->
-- [ ] Final UI/UX polish and stabilization <!-- id: 23 -->
+## Pending
+- [ ] Proactive decay notifications
+- [ ] Dynamic KPI suggestions
+- [ ] Admin Hour batching mode
+- [ ] Pomodoro integration
+- [ ] Cross-note linking / backlinks
+- [ ] Contextual note-scoped assistant
