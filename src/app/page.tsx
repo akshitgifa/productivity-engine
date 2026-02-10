@@ -10,17 +10,14 @@ import { CheckCircle2, Share2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase";
-import { sortTasksByUserOrder, filterAdminTasks, mapTaskData } from "@/lib/engine";
+import { sortTasksByUserOrder, filterAdminTasks, mapTaskData, Task } from "@/lib/engine";
+import { taskService } from '@/lib/taskService';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
-import { Task } from "@/lib/engine";
-
 import { db } from "@/lib/db";
-import { processOutbox } from "@/lib/sync";
-
 export default function Home() {
   const { mode, timeAvailable } = useUserStore();
   const { completeTask } = useTaskFulfillment();
@@ -186,9 +183,7 @@ export default function Home() {
 
   const deleteMutation = useMutation({
     mutationFn: async (taskId: string) => {
-      await db.tasks.delete(taskId);
-      await db.recordAction('tasks', 'delete', { id: taskId });
-      processOutbox().catch(() => {});
+      await taskService.delete(taskId);
     },
     onMutate: async (taskId: string) => {
       await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
@@ -246,17 +241,9 @@ export default function Home() {
     });
     queryClient.setQueryData(['tasks', 'active'], updatedAll);
 
-    // Persist to Dexie + outbox
-    for (let i = 0; i < reorderedTasks.length; i++) {
-      const task = reorderedTasks[i];
-      const newOrder = i + 1;
-      if (task.sortOrder !== newOrder) {
-        const update = { sort_order: newOrder, updated_at: new Date().toISOString() };
-        await db.tasks.update(task.id, update);
-        await db.recordAction('tasks', 'update', { id: task.id, ...update });
-      }
-    }
-    processOutbox().catch(() => {});
+    // Persist via centralized service
+    const orderedIds = reorderedTasks.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
+    await taskService.reorder(orderedIds);
   };
   const activeFilterCount = projectFilters.length;
 

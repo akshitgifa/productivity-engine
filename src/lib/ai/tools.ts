@@ -162,7 +162,10 @@ export function getTools(supabase: SupabaseClient, google: any) {
       }),
       execute: async ({ id, ...updates }: any) => {
         console.log(`[AI TOOLS] >> EXECUTE update_task:`, { id, updates });
-        const { data, error } = await supabase.from('tasks').update(updates).eq('id', id).select().single();
+        // Apply centralized business rules (e.g., deadline → sort_order reset)
+        const { applyTaskUpdateRules } = await import('@/lib/taskService');
+        const processed = applyTaskUpdateRules(updates);
+        const { data, error } = await supabase.from('tasks').update(processed).eq('id', id).select().single();
         if (error) throw error;
         return data;
       },

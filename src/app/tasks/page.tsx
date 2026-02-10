@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 import { mapTaskData } from "@/lib/engine";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
+import { taskService } from '@/lib/taskService';
 import { AnimatePresence, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { Task } from "@/lib/engine";
@@ -14,7 +15,7 @@ import { Task } from "@/lib/engine";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { db } from "@/lib/db";
-import { processOutbox } from "@/lib/sync";
+
 
 export default function TasksPage() {
   const [filter, setFilter] = useState("");
@@ -70,17 +71,9 @@ export default function TasksPage() {
     // Optimistic UI update
     queryClient.setQueryData(['tasks', 'active'], reorderedTasks.map((t, i) => ({ ...t, sortOrder: i + 1 })));
     
-    // Persist to Dexie + outbox
-    for (let i = 0; i < reorderedTasks.length; i++) {
-      const task = reorderedTasks[i];
-      const newOrder = i + 1;
-      if (task.sortOrder !== newOrder) {
-        const update = { sort_order: newOrder, updated_at: new Date().toISOString() };
-        await db.tasks.update(task.id, update);
-        await db.recordAction('tasks', 'update', { id: task.id, ...update });
-      }
-    }
-    processOutbox().catch(() => {});
+    // Persist via centralized service
+    const orderedIds = reorderedTasks.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
+    await taskService.reorder(orderedIds);
   };
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -89,9 +82,7 @@ export default function TasksPage() {
   // 2. Mutations
   const deleteMutation = useMutation<void, Error, string, { previousTasks: any[] | undefined }>({
     mutationFn: async (id: string) => {
-      await db.tasks.delete(id);
-      await db.recordAction('tasks', 'delete', { id });
-      processOutbox().catch(() => {});
+      await taskService.delete(id);
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
@@ -136,10 +127,7 @@ export default function TasksPage() {
 
   const updateStatusMutation = useMutation<void, Error, { id: string, newState: string }, { previousTasks: any[] | undefined }>({
     mutationFn: async ({ id, newState }) => {
-      const update = { state: newState as any, updated_at: new Date().toISOString() };
-      await db.tasks.update(id, update);
-      await db.recordAction('tasks', 'update', { id, ...update });
-      processOutbox().catch(() => {});
+      await taskService.update(id, { state: newState });
     },
     onMutate: async ({ id, newState }) => {
       await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
@@ -156,10 +144,7 @@ export default function TasksPage() {
 
   const recurrenceMutation = useMutation({
     mutationFn: async ({ id, days }: { id: string, days: number }) => {
-      const update = { recurrence_interval_days: days, updated_at: new Date().toISOString() };
-      await db.tasks.update(id, update);
-      await db.recordAction('tasks', 'update', { id, ...update });
-      processOutbox().catch(() => {});
+      await taskService.update(id, { recurrence_interval_days: days });
     },
     onMutate: async ({ id, days }) => {
       await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
