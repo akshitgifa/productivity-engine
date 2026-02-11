@@ -558,7 +558,7 @@ export function QuickCaptureDrawer({
                         />
                       </div>
 
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 overflow-visible">
                         <CustomDateTimePicker
                           label="Deadline"
                           value={manualData.dueDate}

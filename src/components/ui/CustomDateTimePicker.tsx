@@ -134,7 +134,7 @@ export function CustomDateTimePicker({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="fixed inset-0 bg-void/60 backdrop-blur-sm z-[100]"
+                  className="fixed inset-0 bg-void/60 backdrop-blur-sm z-[110]"
                   onClick={() => setIsOpen(false)}
                 />
               )}
@@ -145,7 +145,7 @@ export function CustomDateTimePicker({
                 exit={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.95, y: 4 }}
                 transition={isMobile ? { type: "spring", damping: 25, stiffness: 200 } : { duration: 0.1 }}
                 className={cn(
-                  "bg-surface border border-border overflow-hidden card-shadow z-[101]",
+                  "bg-surface border border-border overflow-hidden card-shadow z-[111]",
                   isMobile 
                     ? "fixed bottom-0 left-0 right-0 rounded-t-[2rem] p-6 pt-2 pb-12 flex flex-col" 
                     : "absolute top-full left-0 right-0 mt-2 rounded-2xl py-4 w-[320px]"
