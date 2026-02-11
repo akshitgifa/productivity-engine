@@ -20,6 +20,10 @@ import { mapTaskData, sortTasksByUserOrder, Task } from "@/lib/engine";
 import { taskService } from "@/lib/taskService";
 import { getProjectColor, hexToRgba, PRESET_COLORS } from "@/lib/colors";
 import { ProjectSelector } from "@/components/ui/ProjectSelector";
+import { NoteCard } from "@/components/notes/NoteCard";
+import { NoteEditor } from "@/components/notes/NoteEditor";
+import { Note } from "@/types/database";
+import { Book } from "lucide-react";
 
 interface Project {
   id: string;
@@ -50,7 +54,8 @@ export default function ProjectDetailPage() {
   });
   const [isEditingContext, setIsEditingContext] = useState(false);
   const [contextInput, setContextInput] = useState("");
-  const [activeTab, setActiveTab] = useState<"Active" | "Waiting" | "History">("Active");
+  const [activeTab, setActiveTab] = useState<"Active" | "Waiting" | "History" | "Notes">("Active");
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const { metrics, isLoading: isAnalyticsLoading } = useProjectAnalytics(id as string);
   const { completeTask } = useTaskFulfillment();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -85,6 +90,16 @@ export default function ProjectDetailPage() {
         .toArray();
       const mapped = rawTasks.map((t) => mapTaskData(t as any));
       return sortTasksByUserOrder(mapped, 'Deep Work');
+    },
+    enabled: !!id
+  });
+
+  // 4. Fetch Project Notes Query from Dexie
+  const { data: projectNotes = [], isLoading: isNotesLoading } = useQuery<Note[]>({
+    queryKey: ['notes', 'project', id],
+    queryFn: async () => {
+      const allNotes = await db.notes.where('project_id').equals(id as string).toArray();
+      return allNotes.sort((a, b) => (b.sort_order ?? 0) - (a.sort_order ?? 0)) as Note[];
     },
     enabled: !!id
   });
@@ -545,7 +560,7 @@ export default function ProjectDetailPage() {
           <section>
             <div className="flex items-center justify-between mb-8 px-1">
               <div className="flex gap-4 p-1 bg-surface/50 rounded-2xl border border-border/30">
-                {(["Active", "Waiting", "History"] as const).map((tab) => (
+                {(["Active", "Waiting", "History", "Notes"] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -564,7 +579,7 @@ export default function ProjectDetailPage() {
               <div className="hidden md:flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: projectColor, opacity: 0.4 }} />
                 <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
-                  {tasks.filter(t => activeTab === "History" ? t.state === 'Done' : t.state === activeTab).length} Entities
+                  {activeTab === "Notes" ? projectNotes.length : tasks.filter(t => activeTab === "History" ? t.state === 'Done' : t.state === activeTab).length} Entities
                 </span>
               </div>
             </div>
@@ -624,6 +639,34 @@ export default function ProjectDetailPage() {
                     );
                   }
 
+                  if (activeTab === 'Notes') {
+                    if (projectNotes.length === 0) {
+                      return (
+                        <div className="text-center py-32 bg-surface/30 border border-dashed border-border/50 rounded-3xl">
+                          <div className="w-16 h-16 bg-void/50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-border">
+                            <Book className="text-zinc-800" size={32} />
+                          </div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Zero strategic notes in this sector</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {projectNotes.map((note) => (
+                          <NoteCard 
+                            key={note.id}
+                            note={{
+                                ...note,
+                                projects: { name: project.name, color: projectColor }
+                            } as any}
+                            onClick={() => setSelectedNote(note)}
+                          />
+                        ))}
+                      </div>
+                    );
+                  }
+
                   return (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {tabTasks.map((task, index) => (
@@ -667,6 +710,36 @@ export default function ProjectDetailPage() {
             isOpen={!!selectedTaskId} 
             onClose={() => setSelectedTaskId(null)} 
           />
+        )}
+      </AnimatePresence>
+
+      {/* Note Editor Overlay */}
+      <AnimatePresence>
+        {selectedNote && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-void/90 backdrop-blur-xl"
+              onClick={() => setSelectedNote(null)}
+            />
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.98, opacity: 0, y: 10 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative w-full h-full"
+            >
+              <NoteEditor 
+                note={{
+                    ...selectedNote,
+                    projects: { name: project.name, color: projectColor }
+                } as any}
+                onClose={() => setSelectedNote(null)} 
+              />
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
