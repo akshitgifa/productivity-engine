@@ -19,6 +19,18 @@ A subtle, global **Sync Indicator** provides real-time feedback:
 - **Initial Sync**: A progress bar tracks the loading of historical data from Supabase.
 - **Background Push**: A floating "Saving" indicator appears when the outbox is being processed.
 
+### Incremental Synchronization
+The sync engine uses **Incremental Pull** logic:
+- Only fetches records updated since the last sync.
+- Merges remote data using `updated_at` logic to prevent overwriting local work.
+- Significantly reduces data transfer after the initial sync.
+
+### Soft-Delete & Undo System
+Mutations follow a **Soft-Delete** pattern:
+- Items aren't immediately purged; they are marked `is_deleted: true`.
+- **Undo Toast**: A 5-second window appears after any deletion, allowing instant restoration.
+- **Local Archival**: Soft-deleted records older than 30 days are automatically purged from local storage to maintain performance.
+
 ### Deadline-Aware Sorting
 Tasks are sorted via **`sortTasksByUserOrder()`** in `src/lib/engine.ts`:
 1. **Deadlined tasks** float above non-deadlined tasks.

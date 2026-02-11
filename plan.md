@@ -21,6 +21,8 @@
 - [x] Memory system (embeddings + retrieval)
 - [x] Smart recurrence with `waiting_until` scheduling
 - [x] Service Worker caching for instant loads
+- [x] Incremental sync (fetch deltas via `updated_at`)
+- [x] Soft-delete & Undo system with local archival
 
 ## Pending
 

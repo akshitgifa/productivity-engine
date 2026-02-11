@@ -48,6 +48,19 @@ Execution is divided into 5 testable phases. **USER MUST TEST AFTER EACH PHASE.*
 
 ---
 
+## Phase 2.6: Sync & Mutational Robustness ✅
+**Goal:** High-performance incremental sync and data safety.
+
+### Tasks
+- [x] **2.6.1 Logic:** Implement **Incremental Pull** (sync only updated records since `lastSync`).
+- [x] **2.6.2 UX:** Universal **Soft-Delete with Undo** support across all data types.
+- [x] **2.6.3 Hygiene:** Implement **Local Archival** (purge soft-deleted items older than 30 days).
+- [x] **2.6.4 Schema:** Repair all synced tables with `updated_at` columns and triggers.
+
+**TESTED ✅:** Deletions are revocable for 5s. Sync is dramatically faster on large datasets.
+
+---
+
 ## Phase 3: Background Intelligence (The Subconscious)
 **Goal:** Subagents and web research.
 

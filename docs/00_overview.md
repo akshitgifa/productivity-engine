@@ -15,6 +15,8 @@
 - **AI Assistant (Chat):** A "God Mode" Assistant capable of managing tasks and projects via tool calls.
 - **Notes:** AI-enhanced knowledge base for unstructured thoughts.
 - **Quick Capture:** Rapid mobile-first entry for tasks via text or voice.
+- **Incremental Sync:** Pulls only changed records to reduce latency and bandwidth.
+- **Soft-Delete with Undo:** 5-second safety window for deleted items.
 
 ### v2.0 Vision: The Second Brain
 The next evolution focus on three pillars:
@@ -42,7 +44,9 @@ The next evolution focus on three pillars:
     - Only proceed to the next phase after user confirmation.
 
 ## Code Integrity
-- **Local-First Pattern:** All data operations MUST prioritize the local Dexie database. 
-- **Mutations:** Use the "Dexie + Outbox" pattern for all writes. Never write directly to Supabase from the client.
+- **Local-First Pattern:** All data operations MUST prioritize the local Dexie database for zero-latency performance.
+- **Incremental Synchronization:** The `sync.ts` engine uses timestamp-based incremental pulling to maintain consistency with minimal data overhead.
+- **Mutations:** Use the "Dexie + Outbox" pattern for all writes. Deletions are "soft" using `is_deleted` to enable undo functionality.
+- **Local Archival:** To keep IndexedDB slim, soft-deleted records are automatically purged locally after 30 days.
 - **Engine Logic:** `src/lib/engine.ts` is the single source of truth for urgency math.
 - **AI Integration:** Use Vercel AI SDK for all AI Assistant interactions. Ensure multi-step tool calls are enabled.

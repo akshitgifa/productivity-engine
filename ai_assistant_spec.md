@@ -62,4 +62,5 @@ Audio messages in the chat are transcribed and processed as multimodal input alo
 ## Business Rules (Applied via `taskService`)
 - Setting a deadline resets `sort_order` to 0 → task enters deadline-sorted pool
 - All task updates auto-stamp `updated_at`
+- **Soft-Delete**: Deletions are non-destructive and marked with `is_deleted` to allow for Undo logic.
 - AI tool `update_task` imports `applyTaskUpdateRules` for server-side consistency
