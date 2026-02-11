@@ -30,6 +30,7 @@ export function ProjectSelector({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [openUpwards, setOpenUpwards] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -46,6 +47,14 @@ export function ProjectSelector({
     };
     if (isOpen && !isMobile) {
       document.addEventListener("mousedown", handleClickOutside);
+      
+      // Check if we should open upwards
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        // If less than 300px below, open upwards
+        setOpenUpwards(spaceBelow < 300);
+      }
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen, isMobile]);
@@ -124,7 +133,10 @@ export function ProjectSelector({
                   "bg-surface border border-border overflow-hidden card-shadow z-[111]",
                   isMobile 
                     ? "fixed bottom-0 left-0 right-0 rounded-t-[2rem] p-6 pt-2 pb-12 max-h-[70vh] flex flex-col" 
-                    : "absolute top-full left-0 right-0 mt-2 rounded-xl py-1"
+                    : cn(
+                        "absolute left-0 right-0 rounded-xl py-1",
+                        openUpwards ? "bottom-full mb-2" : "top-full mt-2"
+                      )
                 )}
               >
                 {isMobile && (
@@ -134,10 +146,13 @@ export function ProjectSelector({
                   </div>
                 )}
 
-                <div className={cn(
-                  "custom-scrollbar",
-                  isMobile ? "overflow-y-auto space-y-1 flex-1" : "max-h-64 overflow-y-auto"
-                )}>
+                <div 
+                  className={cn(
+                    "custom-scrollbar",
+                    isMobile ? "overflow-y-auto space-y-1 flex-1" : "max-h-64 overflow-y-auto"
+                  )}
+                  onWheel={(e) => e.stopPropagation()}
+                >
                   {projectList.map((project) => (
                     <button
                       key={project.id}
