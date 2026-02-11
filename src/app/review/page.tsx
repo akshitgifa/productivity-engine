@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { TrendingUp, BarChart, Clock, AlertTriangle, Hourglass } from "lucide-react";
-import { createClient } from "@/lib/supabase";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { db } from "@/lib/db";
 
 interface ActivityLog {
   completed_at: string;
@@ -18,51 +18,41 @@ interface StagnantTask {
 }
 
 export default function ReviewPage() {
-  const supabase = createClient();
   const queryClient = useQueryClient();
-
-  // Realtime subscription for instant updates
-  useEffect(() => {
-    const channel = supabase
-      .channel('analytics-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['analytics'] });
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, queryClient]);
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['analytics'],
     queryFn: async () => {
       const now = new Date();
       const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const lastWeekIso = lastWeek.toISOString();
 
-      // 1. Fetch Activity Logs
-      const { data: logs } = await supabase
-        .from('activity_logs')
-        .select('*')
-        .gte('completed_at', lastWeek.toISOString());
+      // 1. Fetch Activity Logs from Dexie
+      const allLogs = await db.activity_logs.toArray();
+      const logs = allLogs.filter(log => log.completed_at >= lastWeekIso);
 
-      // 2. Fetch All Active/Waiting Tasks
-      const { data: tasks } = await supabase
-        .from('tasks')
-        .select('*, projects(name)')
-        .in('state', ['Active', 'Waiting']);
+      // 2. Fetch All Active/Waiting Tasks from Dexie
+      const tasks = await db.tasks
+        .where('state')
+        .anyOf(['Active', 'Waiting'])
+        .toArray();
+
+      // Join project names
+      const tasksWithProjects = await Promise.all(
+        tasks.map(async (t) => {
+          const project = t.project_id ? await db.projects.get(t.project_id) : null;
+          return { ...t, projects: project ? { name: project.name } : null };
+        })
+      );
 
       const dailyCounts = [0, 0, 0, 0, 0, 0, 0];
       let totalMinutes = 0;
 
-      if (logs) {
-        logs.forEach((log: any) => {
-          const dayIndex = new Date(log.completed_at).getDay();
-          dailyCounts[dayIndex]++;
-          totalMinutes += log.duration_minutes || 0;
-        });
-      }
+      logs.forEach((log: any) => {
+        const dayIndex = new Date(log.completed_at).getDay();
+        dailyCounts[dayIndex]++;
+        totalMinutes += log.duration_minutes || 0;
+      });
 
       // Shift daily counts so today is the last element
       const todayIndex = now.getDay();
@@ -71,13 +61,13 @@ export default function ReviewPage() {
         reorderedCounts.push(dailyCounts[(todayIndex - 6 + i + 7) % 7]);
       }
 
-      const completedCount = logs?.length || 0;
-      const activeCount = tasks?.filter((t: any) => t.state === 'Active').length || 0;
+      const completedCount = logs.length;
+      const activeCount = tasksWithProjects.filter((t: any) => t.state === 'Active').length;
       const efficiency = activeCount + completedCount > 0 
         ? Math.round((completedCount / (activeCount + completedCount)) * 100) 
         : 0;
 
-      const stagnant = (tasks || [])
+      const stagnant = tasksWithProjects
         .map((t: any) => {
           const idleTime = now.getTime() - new Date(t.last_touched_at || t.created_at).getTime();
           const daysIdle = Math.floor(idleTime / (1000 * 60 * 60 * 24));
@@ -91,7 +81,7 @@ export default function ReviewPage() {
           days_idle: t.daysIdle
         }));
 
-      const waiting = (tasks || []).filter((t: any) => t.state === 'Waiting');
+      const waiting = tasksWithProjects.filter((t: any) => t.state === 'Waiting');
 
       return {
         efficiency,

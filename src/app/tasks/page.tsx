@@ -25,7 +25,7 @@ export default function TasksPage() {
  
   // 1. Fetch Tasks Query from Local DB
   const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ['tasks', 'active'],
+    queryKey: ['tasks', 'manager'],
     queryFn: async () => {
       const allTasks = await db.tasks
         .where('state')
@@ -45,7 +45,7 @@ export default function TasksPage() {
   // Reorder handler
   const handleReorder = async (reorderedTasks: Task[]) => {
     // Optimistic UI update
-    queryClient.setQueryData(['tasks', 'active'], reorderedTasks.map((t, i) => ({ ...t, sortOrder: i + 1 })));
+    queryClient.setQueryData(['tasks', 'manager'], reorderedTasks.map((t, i) => ({ ...t, sortOrder: i + 1 })));
     
     // Persist via centralized service
     const orderedIds = reorderedTasks.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
@@ -61,16 +61,16 @@ export default function TasksPage() {
       await taskService.delete(id);
     },
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
-      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'active']);
-      queryClient.setQueryData(['tasks', 'active'], (old: any) => old?.filter((t: any) => t.id !== id));
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'manager'] });
+      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'manager']);
+      queryClient.setQueryData(['tasks', 'manager'], (old: any) => old?.filter((t: any) => t.id !== id));
       return { previousTasks };
     },
     onError: (err, id, context) => {
-      queryClient.setQueryData(['tasks', 'active'], context?.previousTasks);
+      queryClient.setQueryData(['tasks', 'manager'], context?.previousTasks);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'manager'] });
     }
   });
 
@@ -86,16 +86,16 @@ export default function TasksPage() {
       });
     },
     onMutate: async (task) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
-      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'active']);
-      queryClient.setQueryData(['tasks', 'active'], (old: any) => old?.filter((t: any) => t.id !== task.id));
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'manager'] });
+      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'manager']);
+      queryClient.setQueryData(['tasks', 'manager'], (old: any) => old?.filter((t: any) => t.id !== task.id));
       return { previousTasks };
     },
     onError: (err, task, context) => {
-      queryClient.setQueryData(['tasks', 'active'], context?.previousTasks);
+      queryClient.setQueryData(['tasks', 'manager'], context?.previousTasks);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'manager'] });
       queryClient.invalidateQueries({ queryKey: ['history'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
     }
@@ -106,15 +106,15 @@ export default function TasksPage() {
       await taskService.update(id, { state: newState });
     },
     onMutate: async ({ id, newState }) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
-      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'active']);
-      queryClient.setQueryData(['tasks', 'active'], (old: any) => 
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'manager'] });
+      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'manager']);
+      queryClient.setQueryData(['tasks', 'manager'], (old: any) => 
         old?.map((t: any) => t.id === id ? { ...t, state: newState } : t)
       );
       return { previousTasks };
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'manager'] });
     }
   });
 
@@ -123,15 +123,15 @@ export default function TasksPage() {
       await taskService.update(id, { recurrence_interval_days: days });
     },
     onMutate: async ({ id, days }) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
-      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'active']);
-      queryClient.setQueryData(['tasks', 'active'], (old: any) => 
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'manager'] });
+      const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'manager']);
+      queryClient.setQueryData(['tasks', 'manager'], (old: any) => 
         old?.map((t: any) => t.id === id ? { ...t, recurrenceIntervalDays: days } : t)
       );
       return { previousTasks };
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'manager'] });
     }
   });
 

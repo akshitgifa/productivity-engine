@@ -4,6 +4,7 @@ import React from "react";
 import { usePathname } from "next/navigation";
 import { Navigation } from "@/components/layout/Navigation";
 import { SplashScreen } from "@/components/ui/SplashScreen";
+import { SyncIndicator } from "@/components/ui/SyncIndicator";
 import { initialSync } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
@@ -36,6 +37,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
     <QueryProvider>
       <SplashScreen />
+      <SyncIndicator />
       <main className={cn("min-h-screen", !isChat && !isExport && "pb-24")}>
         {children}
       </main>

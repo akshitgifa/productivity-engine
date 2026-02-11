@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Anchor, Plus, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase";
+import { db } from "@/lib/db";
 
 import { useQuery } from "@tanstack/react-query";
 import { CreateProjectDialog } from "@/components/portfolio/CreateProjectDialog";
@@ -20,17 +20,13 @@ interface Project {
 }
 
 export default function PortfolioPage() {
-  const supabase = createClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ['projects'],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('projects')
-        .select('*')
-        .order('tier', { ascending: true });
-      return data || [];
+      const allProjects = await db.projects.orderBy('name').toArray();
+      return allProjects.sort((a, b) => a.tier - b.tier) as Project[];
     }
   });
 

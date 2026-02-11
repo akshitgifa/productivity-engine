@@ -74,7 +74,7 @@ export function mapTaskData(t: any): Task {
     id: t.id,
     title: t.title,
     projectId: t.project_id,
-    projectName: t.projects?.name || "Inbox",
+    projectName: t.projects?.name || (t.project_id ? "Project..." : "Inbox"),
     projectTier: t.projects?.tier || 3,
     lastTouchedAt: new Date(t.last_touched_at || t.created_at || new Date()),
     decayThresholdDays: t.projects?.decay_threshold_days || 15,
@@ -87,7 +87,7 @@ export function mapTaskData(t: any): Task {
     subtasksCount: t.subtasks?.length || 0,
     completedSubtasksCount: t.subtasks?.filter((st: any) => st.is_completed).length || 0,
     waitingUntil: t.waiting_until ? new Date(t.waiting_until) : null,
-    projectColor: getProjectColor(t.projects?.name || "Inbox", t.projects?.color),
+    projectColor: getProjectColor(t.projects?.name || (t.project_id ? "Project..." : "Inbox"), t.projects?.color),
     sortOrder: t.sort_order ?? 0
   };
 }

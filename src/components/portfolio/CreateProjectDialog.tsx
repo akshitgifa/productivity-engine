@@ -1,10 +1,9 @@
-"use client";
-
 import React, { useState } from "react";
 import { X, Check, Anchor, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase";
+import { db } from "@/lib/db";
+import { processOutbox } from "@/lib/sync";
 import { getProjectColor } from "@/lib/colors";
 
 interface CreateProjectDialogProps {
@@ -20,7 +19,6 @@ export function CreateProjectDialog({ isOpen, onClose }: CreateProjectDialogProp
   const [decayThreshold, setDecayThreshold] = useState<number>(15);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const supabase = createClient();
   const queryClient = useQueryClient();
 
   interface CreateProjectVars {
@@ -31,32 +29,23 @@ export function CreateProjectDialog({ isOpen, onClose }: CreateProjectDialogProp
 
   const createProjectMutation = useMutation({
     mutationFn: async (vars: CreateProjectVars) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      const insertData: any = {
+      const newProject = {
+        id: crypto.randomUUID(),
         name: vars.name,
         tier: vars.tier,
         decay_threshold_days: vars.decayThreshold,
         color: getProjectColor(vars.name),
+        kpi_value: 0,
+        last_touched_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
-      
-      if (session?.user?.id) {
-        insertData.user_id = session.user.id;
-      }
 
-      console.log("Initiating project creation with payload:", insertData);
+      await db.projects.add(newProject);
+      await db.recordAction('projects', 'insert', newProject);
+      processOutbox().catch(() => {});
 
-      const { data, error } = await supabase
-        .from('projects')
-        .insert([insertData])
-        .select()
-        .single();
-      
-      if (error) {
-        console.error("Supabase Error during project creation:", error);
-        throw error;
-      }
-      return data;
+      return newProject;
     },
     onMutate: async (vars: CreateProjectVars) => {
       await queryClient.cancelQueries({ queryKey: ['projects'] });

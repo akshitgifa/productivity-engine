@@ -9,7 +9,6 @@ import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 import { CheckCircle2, Share2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase";
 import { sortTasksByUserOrder, filterAdminTasks, mapTaskData, Task } from "@/lib/engine";
 import { taskService } from '@/lib/taskService';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -21,13 +20,12 @@ import { db } from "@/lib/db";
 export default function Home() {
   const { mode, timeAvailable } = useUserStore();
   const { completeTask } = useTaskFulfillment();
-  const supabase = createClient();
   const queryClient = useQueryClient();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [projectFilters, setProjectFilters] = useState<string[]>([]);
   // 1. Fetch Active Tasks Query from Local DB
   const { data: allActive = [], isLoading: isTasksLoading } = useQuery({
-    queryKey: ['tasks', 'active'],
+    queryKey: ['tasks', 'today'],
     queryFn: async () => {
       // Fetch tasks from local Dexie DB
       const tasks = await db.tasks
@@ -61,59 +59,18 @@ export default function Home() {
     }
   });
 
-  // Keep view_prefs on Supabase for now as it's less critical for offline core loop
-  // and involves complex merging. We can move it later if needed.
-  const { data: homePrefs } = useQuery({
-    queryKey: ['view_prefs', 'home'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('view_preferences')
-        .select('id, value')
-        .eq('key', 'home_filters')
-        .is('user_id', null)
-        .maybeSingle();
-      return data || null;
-    },
-    staleTime: 1000 * 60 * 5
-  });
-
+  // Load home filters from localStorage
   useEffect(() => {
-    const saved = homePrefs?.value?.projectFilterIds;
-    if (Array.isArray(saved)) {
-      setProjectFilters(saved);
-    }
-  }, [homePrefs]);
+    try {
+      const saved = localStorage.getItem('home_project_filters');
+      if (saved) setProjectFilters(JSON.parse(saved));
+    } catch {}
+  }, []);
 
-  const savePrefsMutation = useMutation({
-    mutationFn: async (nextFilters: string[]) => {
-      const { data: existing } = await supabase
-        .from('view_preferences')
-        .select('id')
-        .eq('key', 'home_filters')
-        .is('user_id', null)
-        .maybeSingle();
-      
-      const payload = {
-        key: 'home_filters',
-        value: { projectFilterIds: nextFilters },
-        user_id: null
-      };
-
-      if (existing?.id) {
-        const { error } = await supabase
-          .from('view_preferences')
-          .update({ value: payload.value, updated_at: new Date().toISOString() })
-          .eq('id', existing.id);
-        if (error) throw error;
-        return;
-      }
-      
-      const { error } = await supabase
-        .from('view_preferences')
-        .insert(payload);
-      if (error) throw error;
-    }
-  });
+  const saveFilters = (nextFilters: string[]) => {
+    setProjectFilters(nextFilters);
+    localStorage.setItem('home_project_filters', JSON.stringify(nextFilters));
+  };
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const selectedTask = allActive.find(t => t.id === selectedTaskId);
@@ -149,13 +106,13 @@ export default function Home() {
       });
     },
     onMutate: async (task: any) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'today'] });
       await queryClient.cancelQueries({ queryKey: ['history', 'recent'] });
 
-      const previousActive = queryClient.getQueryData<any[]>(['tasks', 'active']);
+      const previousActive = queryClient.getQueryData<any[]>(['tasks', 'today']);
       const previousRecent = queryClient.getQueryData<any[]>(['history', 'recent']);
 
-      queryClient.setQueryData(['tasks', 'active'], (old: any) => old?.filter((t: any) => t.id !== task.id));
+      queryClient.setQueryData(['tasks', 'today'], (old: any) => old?.filter((t: any) => t.id !== task.id));
       
       queryClient.setQueryData(['history', 'recent'], (old: any) => {
         const newItem = {
@@ -171,11 +128,11 @@ export default function Home() {
       return { previousActive, previousRecent };
     },
     onError: (err, task, context) => {
-      queryClient.setQueryData(['tasks', 'active'], context?.previousActive);
+      queryClient.setQueryData(['tasks', 'today'], context?.previousActive);
       queryClient.setQueryData(['history', 'recent'], context?.previousRecent);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
       queryClient.invalidateQueries({ queryKey: ['history'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
     }
@@ -186,31 +143,21 @@ export default function Home() {
       await taskService.delete(taskId);
     },
     onMutate: async (taskId: string) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
-      const previous = queryClient.getQueryData<any[]>(['tasks', 'active']);
-      queryClient.setQueryData(['tasks', 'active'], (old: any) => old?.filter((t: any) => t.id !== taskId));
+      await queryClient.cancelQueries({ queryKey: ['tasks', 'today'] });
+      const previous = queryClient.getQueryData<any[]>(['tasks', 'today']);
+      queryClient.setQueryData(['tasks', 'today'], (old: any) => old?.filter((t: any) => t.id !== taskId));
       return { previous };
     },
     onError: (err, id, context) => {
-      queryClient.setQueryData(['tasks', 'active'], context?.previous);
+      queryClient.setQueryData(['tasks', 'today'], context?.previous);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
     }
   });
 
-  // Realtime Sync - Only for critical external triggers if needed. 
-  // Removing broad Task sync to prevent edit-flicker for solo user.
-  useEffect(() => {
-    const channel = supabase
-      .channel('home-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => {
-        queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [supabase, queryClient]);
+
 
   // Filter & Logic
   let filteredTasks = allActive;
@@ -239,7 +186,7 @@ export default function Home() {
       if (idx !== -1) return { ...t, sortOrder: idx + 1 };
       return t;
     });
-    queryClient.setQueryData(['tasks', 'active'], updatedAll);
+    queryClient.setQueryData(['tasks', 'today'], updatedAll);
 
     // Persist via centralized service
     const orderedIds = reorderedTasks.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
@@ -251,8 +198,7 @@ export default function Home() {
     const next = projectFilters.includes(id)
       ? projectFilters.filter((pid) => pid !== id)
       : [...projectFilters, id];
-    setProjectFilters(next);
-    savePrefsMutation.mutate(next);
+    saveFilters(next);
   };
 
   return (
@@ -343,8 +289,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => {
-                      setProjectFilters([]);
-                      savePrefsMutation.mutate([]);
+                      saveFilters([]);
                     }}
                     className="w-full mt-2 bg-void/40 border border-border/20 text-zinc-500 hover:text-zinc-300 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all"
                   >
