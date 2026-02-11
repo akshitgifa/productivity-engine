@@ -139,8 +139,10 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
 
   const deleteSubtaskMutation = useMutation({
     mutationFn: async (id: string) => {
-      await db.subtasks.delete(id);
-      await db.recordAction('subtasks', 'delete', { id });
+      const now = new Date().toISOString();
+      await db.subtasks.update(id, { is_deleted: true, updated_at: now } as any);
+      await db.recordAction('subtasks', 'update', { id, is_deleted: true, updated_at: now });
+      processOutbox().catch(() => {});
       processOutbox().catch(() => {});
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "subtasks"] }),

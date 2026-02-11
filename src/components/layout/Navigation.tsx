@@ -48,8 +48,9 @@ export function Navigation() {
         queryKey: ['history'],
         queryFn: async () => {
           const doneTasks = await db.tasks.where('state').equals('Done').toArray();
+          const activeDone = doneTasks.filter(t => !t.is_deleted);
           return await Promise.all(
-            doneTasks.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map(async (t) => {
+            activeDone.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).map(async (t) => {
               const project = t.project_id ? await db.projects.get(t.project_id) : null;
               return { ...t, project_name: project?.name || 'Inbox' };
             })
@@ -61,7 +62,7 @@ export function Navigation() {
         queryKey: ['notes'],
         queryFn: async () => {
           const notes = await db.notes.toArray();
-          return notes.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+          return notes.filter(n => !n.is_deleted).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
         }
       });
     } else if (href === "/portfolio") {
@@ -77,7 +78,7 @@ export function Navigation() {
         queryKey: ['tasks', 'active'],
         queryFn: async () => {
           const activeTasks = await db.tasks.where('state').equals('Active').toArray();
-          return activeTasks.map((t: any) => mapTaskData(t));
+          return activeTasks.filter(t => !t.is_deleted).map((t: any) => mapTaskData(t));
         }
       });
     }

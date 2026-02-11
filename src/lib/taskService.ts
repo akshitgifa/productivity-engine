@@ -49,6 +49,7 @@ export const taskService = {
       id: crypto.randomUUID(),
       sort_order: 0,
       state: 'Active',
+      is_deleted: false,
       created_at: now,
       updated_at: now,
       last_touched_at: now,
@@ -74,11 +75,27 @@ export const taskService = {
   },
 
   /**
-   * Delete a task from local DB + outbox.
+   * Soft-delete a task. Sets is_deleted = true instead of erasing.
+   * Returns the deleted task data so the UI can offer "Undo".
    */
-  async delete(taskId: string): Promise<void> {
-    await db.tasks.delete(taskId);
-    await db.recordAction('tasks', 'delete', { id: taskId });
+  async delete(taskId: string): Promise<any> {
+    const task = await db.tasks.get(taskId);
+    const now = new Date().toISOString();
+    const update = { is_deleted: true, updated_at: now };
+    await db.tasks.update(taskId, update);
+    await db.recordAction('tasks', 'update', { id: taskId, ...update });
+    processOutbox().catch(() => {});
+    return task; // Return so caller can offer "Undo"
+  },
+
+  /**
+   * Undo a soft-delete by restoring is_deleted to false.
+   */
+  async undoDelete(taskId: string): Promise<void> {
+    const now = new Date().toISOString();
+    const update = { is_deleted: false, updated_at: now };
+    await db.tasks.update(taskId, update);
+    await db.recordAction('tasks', 'update', { id: taskId, ...update });
     processOutbox().catch(() => {});
   },
 
@@ -149,6 +166,7 @@ export const taskService = {
         est_duration_minutes: task.durationMinutes || 30,
         energy_tag: (task.energyTag as any) || "Shallow",
         state: "Active" as const,
+        is_deleted: false,
         recurrence_interval_days: task.recurrenceIntervalDays,
         waiting_until: nextRunDate.toISOString(),
         sort_order: 0,
@@ -164,10 +182,12 @@ export const taskService = {
     // 5. Compact sort_order for remaining active tasks
     try {
       const activeTasks = await db.tasks.where("state").equals("Active").toArray();
-      const tasksForCompaction = activeTasks.map((t) => ({
-        id: t.id,
-        sortOrder: t.sort_order ?? 0,
-      }));
+      const tasksForCompaction = activeTasks
+        .filter(t => !t.is_deleted)
+        .map((t) => ({
+          id: t.id,
+          sortOrder: t.sort_order ?? 0,
+        }));
       const updates = compactSortOrder(tasksForCompaction);
       for (const u of updates) {
         const upd = { sort_order: u.newSortOrder, updated_at: now };

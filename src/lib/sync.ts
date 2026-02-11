@@ -2,10 +2,16 @@ import { db } from './db';
 import { createClient } from './supabase';
 import { useSyncStore } from '@/store/syncStore';
 
-// ─── Debounce mechanism ────────────────────────────────────────────────────
-// Rapid-fire processOutbox() calls (e.g. reorder writing 12 items) coalesce
-// into a single sync pass after 300ms of quiet.
+// ─── Constants ─────────────────────────────────────────────────────────────
+const SYNC_TABLES = ['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards'] as const;
+const LAST_SYNC_KEY = 'productivity_engine_last_sync';
 
+// Tables that have updated_at columns (used for incremental sync)
+const INCREMENTAL_TABLES = new Set(['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards']);
+// Tables that have is_deleted columns (used for archival purge)
+const SOFT_DELETE_TABLES = new Set(['projects', 'tasks', 'notes', 'subtasks', 'context_cards']);
+
+// ─── Debounce mechanism ────────────────────────────────────────────────────
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let syncInProgress = false;
 
@@ -26,9 +32,20 @@ export function processOutbox() {
   });
 }
 
-// ─── Batched Outbox Processing ─────────────────────────────────────────────
-// Groups items by (tableName, action) and sends one Supabase call per group.
+/**
+ * Sanitizes data by removing any camelCase keys that might cause Supabase rejections.
+ */
+function sanitizeForSupabase(data: Record<string, any>): Record<string, any> {
+  const sanitized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!/[A-Z]/.test(key)) {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
 
+// ─── Batched Outbox Processing ─────────────────────────────────────────────
 async function _processOutboxBatched() {
   if (!navigator.onLine) return;
 
@@ -42,7 +59,6 @@ async function _processOutboxBatched() {
   console.log(`[Sync] Batching ${outboxItems.length} outbox items...`);
   const supabase = createClient();
 
-  // Group by tableName + action
   const groups = new Map<string, typeof outboxItems>();
   for (const item of outboxItems) {
     const key = `${item.tableName}:${item.action}`;
@@ -57,34 +73,44 @@ async function _processOutboxBatched() {
     try {
       let error;
 
-      if (action === 'insert') {
-        // Batch insert via upsert (handles conflicts gracefully)
-        const rows = items.map(i => i.data);
-        ({ error } = await supabase.from(tableName).upsert(rows));
-      } else if (action === 'update') {
-        // Batch updates: merge all updates for the same ID, then upsert
+      if (action === 'insert' || action === 'update') {
+        // Fetch full records from Dexie to satisfy NOT NULL constraints
+        const uniqueIds = Array.from(new Set(items.map(i => i.data.id)));
+        const fullRecordsFromDb = await (db as any)[tableName].bulkGet(uniqueIds);
+        const recordMap = new Map();
+        fullRecordsFromDb.forEach((r: any) => {
+          if (r) recordMap.set(r.id, r);
+        });
+
         const mergedById = new Map<string, Record<string, any>>();
         for (const item of items) {
           const { id, ...fields } = item.data;
-          const existing = mergedById.get(id) || {};
-          mergedById.set(id, { ...existing, ...fields });
+          const base = recordMap.get(id) || {};
+          const existing = mergedById.get(id) || base;
+          const sanitizedFields = sanitizeForSupabase(fields);
+          mergedById.set(id, { ...existing, ...sanitizedFields, id });
         }
-        const rows = Array.from(mergedById.entries()).map(([id, fields]) => ({ id, ...fields }));
-        ({ error } = await supabase.from(tableName).upsert(rows));
+        const rows = Array.from(mergedById.values());
+        
+        const { error: supabaseError } = await supabase.from(tableName).upsert(rows);
+        error = supabaseError;
+
+        if (error) {
+          console.error(`[Sync] Supabase rejection for ${key}:`, error, { 
+            tableName, action, rowsAttempted: rows 
+          });
+        }
       } else if (action === 'delete') {
         const ids = items.map(i => i.data.id);
-        ({ error } = await supabase.from(tableName).delete().in('id', ids));
+        const { error: supabaseError } = await supabase.from(tableName).delete().in('id', ids);
+        error = supabaseError;
       }
 
       if (!error) {
-        // Clear all processed items from outbox
         const ids = items.map(i => i.id!).filter(Boolean);
         await db.sync_outbox.bulkDelete(ids);
         store.setPendingCount(Math.max(0, useSyncStore.getState().pendingCount - 1));
         console.log(`[Sync] ✓ ${tableName}:${action} (${items.length} items)`);
-      } else {
-        console.error(`[Sync] Error syncing ${key}:`, error);
-        // Continue with other groups — don't block on one failure
       }
     } catch (err) {
       console.error(`[Sync] Critical error syncing ${key}:`, err);
@@ -96,7 +122,90 @@ async function _processOutboxBatched() {
   syncInProgress = false;
 }
 
-// ─── Initial Sync ──────────────────────────────────────────────────────────
+// ─── Incremental Sync (Merge Logic) ─────────────────────────────────────────
+
+/**
+ * Fetches only records updated since `lastSync` and merges them into Dexie
+ * using timestamp comparison. Falls back to full fetch on first sync.
+ */
+async function syncTable(tableName: string, supabase: any, lastSync: string | null) {
+  let query = supabase.from(tableName).select('*');
+  
+  // Incremental: only fetch records updated since last sync (for tables that support it)
+  if (lastSync && INCREMENTAL_TABLES.has(tableName)) {
+    query = query.gt('updated_at', lastSync);
+  }
+
+  const { data: remoteData, error } = await query;
+  if (error || !remoteData) {
+    console.error(`[Sync] Failed to fetch ${tableName}:`, error);
+    return;
+  }
+
+  if (remoteData.length === 0) return;
+
+  const localData = await (db as any)[tableName].bulkGet(
+    remoteData.map((r: any) => r.id)
+  );
+  const localMap = new Map();
+  localData.forEach((item: any) => {
+    if (item) localMap.set(item.id, item);
+  });
+
+  const toPut: any[] = [];
+  
+  for (const remoteItem of remoteData) {
+    const localItem = localMap.get(remoteItem.id);
+    if (!localItem) {
+      toPut.push(remoteItem);
+    } else {
+      const remoteUpdate = new Date((remoteItem as any).updated_at || 0).getTime();
+      const localUpdate = new Date((localItem as any).updated_at || 0).getTime();
+      
+      if (remoteUpdate >= localUpdate) {
+        toPut.push(remoteItem);
+      }
+    }
+  }
+
+  if (toPut.length > 0) {
+    await (db as any)[tableName].bulkPut(toPut);
+    console.log(`[Sync] Pulled ${toPut.length} updates for ${tableName}`);
+  }
+}
+
+// ─── Real-time Subscriptions ──────────────────────────────────────────────
+
+export function setupSubscriptions() {
+  if (typeof window === 'undefined') return () => {};
+  
+  const supabase = createClient();
+  console.log('[Sync] Initializing real-time subscriptions...');
+
+  const channel = supabase
+    .channel('db-changes')
+    .on('postgres_changes', { event: '*', schema: 'public' }, async (payload: any) => {
+      const { table, eventType, new: newRow, old: oldRow } = payload;
+      console.log(`[Sync] Real-time ${eventType} on ${table}`);
+
+      if (eventType === 'INSERT' || eventType === 'UPDATE') {
+        const localItem = await (db as any)[table].get(newRow.id);
+        const remoteUpdate = new Date(newRow.updated_at || 0).getTime();
+        const localUpdate = new Date(localItem?.updated_at || 0).getTime();
+
+        if (!localItem || remoteUpdate >= localUpdate) {
+          await (db as any)[table].put(newRow);
+        }
+      } else if (eventType === 'DELETE') {
+        await (db as any)[table].delete(oldRow.id);
+      }
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
 
 export async function initialSync() {
   if (!navigator.onLine) return;
@@ -105,23 +214,56 @@ export async function initialSync() {
   store.setPhase('syncing');
   store.setProgress(0);
 
-  console.log('[Sync] Performing initial data fetch...');
+  // Push local changes BEFORE pulling remote ones
+  await _processOutboxBatched();
+
+  const lastSync = localStorage.getItem(LAST_SYNC_KEY);
+  console.log(`[Sync] Pulling remote updates${lastSync ? ` since ${lastSync}` : ' (full sync)'}...`);
+  
   const supabase = createClient();
 
-  const tables = ['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards'] as const;
-
-  for (let i = 0; i < tables.length; i++) {
-    const table = tables[i];
-    const { data, error } = await supabase.from(table).select('*');
-    if (data && !error) {
-       // @ts-ignore
-      await db[table].bulkPut(data);
-    }
-    store.setProgress((i + 1) / tables.length);
+  for (let i = 0; i < SYNC_TABLES.length; i++) {
+    await syncTable(SYNC_TABLES[i], supabase, lastSync);
+    store.setProgress((i + 1) / SYNC_TABLES.length);
   }
 
+  // Save timestamp for next incremental sync
+  localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
+
   store.setPhase('idle');
-  console.log('[Sync] Initial sync complete.');
+  console.log('[Sync] Synchronization complete.');
+}
+
+// ─── Local Archival ────────────────────────────────────────────────────────
+
+/**
+ * Purge soft-deleted records older than 30 days from local Dexie.
+ * These records are still in Supabase cloud for safety.
+ */
+export async function purgeLocalArchive() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffISO = cutoff.toISOString();
+
+  for (const table of SOFT_DELETE_TABLES) {
+    try {
+      const records = await (db as any)[table]
+        .where('is_deleted')
+        .equals(1) // Dexie stores booleans as 0/1
+        .toArray();
+      
+      const toDelete = records.filter((r: any) => 
+        r.updated_at && r.updated_at < cutoffISO
+      );
+
+      if (toDelete.length > 0) {
+        await (db as any)[table].bulkDelete(toDelete.map((r: any) => r.id));
+        console.log(`[Archive] Purged ${toDelete.length} old records from ${table}`);
+      }
+    } catch {
+      // Table might not have is_deleted column (e.g., activity_logs)
+    }
+  }
 }
 
 // ─── Background listeners ──────────────────────────────────────────────────
@@ -132,9 +274,11 @@ if (typeof window !== 'undefined') {
     processOutbox();
   });
 
-  // Periodic fallback (every 30 seconds)
+  // Periodic outbox processing (every 30 seconds)
   setInterval(() => {
     processOutbox();
   }, 30000);
-}
 
+  // Daily local archive purge
+  setTimeout(() => purgeLocalArchive(), 5000);
+}

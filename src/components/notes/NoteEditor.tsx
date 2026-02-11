@@ -90,8 +90,11 @@ export function NoteEditor({ note, onClose }: NoteEditorProps) {
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      await db.notes.delete(note.id);
-      await db.recordAction("notes", "delete", { id: note.id });
+      const now = new Date().toISOString();
+      const update = { is_deleted: true, updated_at: now };
+      await db.notes.update(note.id, update);
+      await db.recordAction('notes', 'update', { id: note.id, ...update });
+      processOutbox().catch(() => {});
       processOutbox().catch(() => {});
     },
     onSuccess: () => {

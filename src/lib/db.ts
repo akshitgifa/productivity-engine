@@ -36,6 +36,7 @@ export interface Task {
   blocked_by_id?: string;
   recurrence_interval_days?: number;
   sort_order: number;
+  is_deleted?: boolean;
   last_touched_at: string;
   created_at: string;
   updated_at: string;
@@ -49,6 +50,7 @@ export interface ActivityLog {
   completed_at: string;
   duration_minutes: number;
   session_mode: string;
+  updated_at?: string;
 }
 
 export interface Note {
@@ -59,6 +61,7 @@ export interface Note {
   title: string;
   content: string;
   is_read?: boolean;
+  is_deleted?: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -69,7 +72,9 @@ export interface Subtask {
   task_id: string;
   title: string;
   is_completed: boolean;
+  is_deleted?: boolean;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface ContextCard {
@@ -106,6 +111,15 @@ export class EntropyDatabase extends Dexie {
       notes: 'id, project_id, task_id, sort_order, is_read',
       subtasks: 'id, task_id',
       context_cards: 'id, project_id',
+      sync_outbox: '++id, timestamp'
+    });
+    this.version(6).stores({
+      projects: 'id, name, last_touched_at, is_deleted',
+      tasks: 'id, project_id, state, due_date, sort_order, is_deleted',
+      activity_logs: 'id, task_id, project_id',
+      notes: 'id, project_id, task_id, sort_order, is_read, is_deleted',
+      subtasks: 'id, task_id, is_deleted',
+      context_cards: 'id, project_id, is_deleted',
       sync_outbox: '++id, timestamp'
     });
   }

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Navigation } from "@/components/layout/Navigation";
 import { SplashScreen } from "@/components/ui/SplashScreen";
 import { SyncIndicator } from "@/components/ui/SyncIndicator";
-import { initialSync } from "@/lib/sync";
+import { initialSync, setupSubscriptions } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
@@ -30,8 +30,15 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         .catch((err) => console.error('[PWA] Service Worker registration failed:', err));
     }
 
-    // Initial Data Sync from Supabase to Dexie
+    // Initialize real-time listeners
+    const cleanup = setupSubscriptions();
+
+    // Perform initial bi-directional sync
     initialSync().catch(err => console.error('[Sync] Initial sync error:', err));
+
+    return () => {
+      cleanup();
+    };
   }, []);
 
   return (

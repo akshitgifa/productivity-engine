@@ -185,8 +185,11 @@ export default function ProjectDetailPage() {
 
   const deleteProjectMutation = useMutation<void, Error, string>({
     mutationFn: async (projectId) => {
-      await db.projects.delete(projectId);
-      await db.recordAction('projects', 'delete', { id: projectId });
+      const now = new Date().toISOString();
+      const update = { is_deleted: true, updated_at: now };
+      await db.projects.update(projectId, update);
+      await db.recordAction('projects', 'update', { id: projectId, ...update });
+      processOutbox().catch(() => {});
       processOutbox().catch(() => {});
     },
     onSuccess: () => {

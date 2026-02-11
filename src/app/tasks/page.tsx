@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { FocusCard } from "@/components/ui/FocusCard";
 import { Search, Filter, Trash2, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
@@ -8,7 +8,7 @@ import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 import { mapTaskData, sortTasksByUserOrder } from "@/lib/engine";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { taskService } from '@/lib/taskService';
-import { AnimatePresence, Reorder } from "framer-motion";
+import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { Task } from "@/lib/engine";
 
@@ -22,6 +22,7 @@ export default function TasksPage() {
   const supabase = createClient();
   const { completeTask } = useTaskFulfillment();
   const queryClient = useQueryClient();
+  const [undoToast, setUndoToast] = useState<{ id: string; title: string } | null>(null);
  
   // 1. Fetch Tasks Query from Local DB
   const { data: tasks = [], isLoading } = useQuery({
@@ -32,7 +33,8 @@ export default function TasksPage() {
         .equals('Active')
         .toArray();
       
-      const mapped = await Promise.all(allTasks.map(async (t) => {
+      const filtered = allTasks.filter(t => !t.is_deleted);
+      const mapped = await Promise.all(filtered.map(async (t) => {
         const projects = t.project_id ? await db.projects.get(t.project_id) : null;
         return mapTaskData({ ...t, projects });
       }));
@@ -56,15 +58,22 @@ export default function TasksPage() {
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
 
   // 2. Mutations
-  const deleteMutation = useMutation<void, Error, string, { previousTasks: any[] | undefined }>({
+  const deleteMutation = useMutation<any, Error, string, { previousTasks: any[] | undefined }>({
     mutationFn: async (id: string) => {
-      await taskService.delete(id);
+      const deleted = await taskService.delete(id);
+      return deleted;
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ['tasks', 'manager'] });
       const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'manager']);
       queryClient.setQueryData(['tasks', 'manager'], (old: any) => old?.filter((t: any) => t.id !== id));
       return { previousTasks };
+    },
+    onSuccess: (deletedTask) => {
+      if (deletedTask) {
+        setUndoToast({ id: deletedTask.id, title: deletedTask.title || 'Task' });
+        setTimeout(() => setUndoToast(null), 5000);
+      }
     },
     onError: (err, id, context) => {
       queryClient.setQueryData(['tasks', 'manager'], context?.previousTasks);
@@ -73,6 +82,14 @@ export default function TasksPage() {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'manager'] });
     }
   });
+
+  const handleUndo = useCallback(async () => {
+    if (!undoToast) return;
+    await taskService.undoDelete(undoToast.id);
+    setUndoToast(null);
+    queryClient.invalidateQueries({ queryKey: ['tasks', 'manager'] });
+    queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
+  }, [undoToast, queryClient]);
 
   const completeMutation = useMutation<void, Error, any, { previousTasks: any[] | undefined }>({
     mutationFn: async (task: any) => {
@@ -146,7 +163,6 @@ export default function TasksPage() {
 
   const handleDelete = (id: string) => {
     if (deleteMutation.isPending) return;
-    if (!confirm("Delete this task?")) return;
     deleteMutation.mutate(id);
   };
   const handleComplete = (task: any) => {
@@ -249,6 +265,30 @@ export default function TasksPage() {
             isOpen={!!selectedTaskId} 
             onClose={() => setSelectedTaskId(null)} 
           />
+        )}
+      </AnimatePresence>
+
+      {/* Undo Delete Toast */}
+      <AnimatePresence>
+        {undoToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-40 left-6 right-6 md:bottom-12 md:right-12 md:left-auto md:w-auto md:min-w-[320px] md:translate-x-0 z-[100] glass rounded-2xl px-6 py-4 card-shadow flex items-center justify-between gap-6 border border-white/10"
+          >
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm text-white/90 font-medium">
+                Deleted — {undoToast.title.length > 20 ? undoToast.title.substring(0, 20) + '...' : undoToast.title}
+              </span>
+            </div>
+            <button
+              onClick={handleUndo}
+              className="px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-xl text-xs font-black uppercase tracking-widest transition-all border border-primary/20 active:scale-95"
+            >
+              Undo
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

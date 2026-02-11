@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { FocusCard } from "@/components/ui/FocusCard";
 import { ModeSelector } from "@/components/layout/ModeSelector";
 import { TimeAvailableSelector } from "@/components/layout/TimeAvailableSelector";
@@ -12,17 +12,19 @@ import { cn } from "@/lib/utils";
 import { sortTasksByUserOrder, filterAdminTasks, mapTaskData, Task } from "@/lib/engine";
 import { taskService } from '@/lib/taskService';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { db } from "@/lib/db";
+
 export default function Home() {
   const { mode, timeAvailable } = useUserStore();
   const { completeTask } = useTaskFulfillment();
   const queryClient = useQueryClient();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [projectFilters, setProjectFilters] = useState<string[]>([]);
+  const [undoToast, setUndoToast] = useState<{ id: string; title: string } | null>(null);
+
   // 1. Fetch Active Tasks Query from Local DB
   const { data: allActive = [], isLoading: isTasksLoading } = useQuery({
     queryKey: ['tasks', 'today'],
@@ -33,9 +35,9 @@ export default function Home() {
         .equals('Active')
         .toArray();
       
-      // Filter by waiting_until (Dexie doesn't support complex OR filters easily in 'where')
+      // Filter by waiting_until and exclude soft-deleted
       const now = new Date().toISOString();
-      const filtered = tasks.filter(t => !t.waiting_until || t.waiting_until <= now);
+      const filtered = tasks.filter(t => !t.is_deleted && (!t.waiting_until || t.waiting_until <= now));
 
       // Enhance with project data (Manual join since Dexie is NoSQL-style)
       const enhanced = await Promise.all(filtered.map(async (t) => {
@@ -43,7 +45,6 @@ export default function Home() {
         if (t.project_id) {
           projects = await db.projects.get(t.project_id);
         }
-        // Subtasks count (simplified for now)
         return mapTaskData({ ...t, projects });
       }));
 
@@ -55,7 +56,8 @@ export default function Home() {
   const { data: projects = [] } = useQuery({
     queryKey: ['projects', 'all'],
     queryFn: async () => {
-      return await db.projects.orderBy('name').toArray();
+      const all = await db.projects.orderBy('name').toArray();
+      return all.filter((p: any) => !p.is_deleted);
     }
   });
 
@@ -86,7 +88,7 @@ export default function Home() {
         .limit(3)
         .toArray();
       
-      return await Promise.all(tasks.map(async (t) => {
+      return await Promise.all(tasks.filter(t => !t.is_deleted).map(async (t) => {
         const projects = t.project_id ? await db.projects.get(t.project_id) : null;
         return { ...t, projects };
       }));
@@ -140,13 +142,20 @@ export default function Home() {
 
   const deleteMutation = useMutation({
     mutationFn: async (taskId: string) => {
-      await taskService.delete(taskId);
+      const deleted = await taskService.delete(taskId);
+      return deleted;
     },
     onMutate: async (taskId: string) => {
       await queryClient.cancelQueries({ queryKey: ['tasks', 'today'] });
       const previous = queryClient.getQueryData<any[]>(['tasks', 'today']);
       queryClient.setQueryData(['tasks', 'today'], (old: any) => old?.filter((t: any) => t.id !== taskId));
       return { previous };
+    },
+    onSuccess: (deletedTask) => {
+      if (deletedTask) {
+        setUndoToast({ id: deletedTask.id, title: deletedTask.title || 'Task' });
+        setTimeout(() => setUndoToast(null), 5000);
+      }
     },
     onError: (err, id, context) => {
       queryClient.setQueryData(['tasks', 'today'], context?.previous);
@@ -157,7 +166,12 @@ export default function Home() {
     }
   });
 
-
+  const handleUndo = useCallback(async () => {
+    if (!undoToast) return;
+    await taskService.undoDelete(undoToast.id);
+    setUndoToast(null);
+    queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
+  }, [undoToast, queryClient]);
 
   // Filter & Logic
   let filteredTasks = allActive;
@@ -192,6 +206,7 @@ export default function Home() {
     const orderedIds = reorderedTasks.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
     await taskService.reorder(orderedIds);
   };
+
   const activeFilterCount = projectFilters.length;
 
   const toggleProjectFilter = (id: string) => {
@@ -202,7 +217,7 @@ export default function Home() {
   };
 
   return (
-    <div className="px-6 pt-12 pb-32 max-w-md md:max-w-6xl mx-auto">
+    <div className="px-6 pt-12 pb-32 max-w-md md:max-w-6xl mx-auto overflow-x-hidden">
       <header className="mb-10">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -301,7 +316,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="md:col-span-7 lg:col-span-8 space-y-4">
+        <div className="md:col-span-12 lg:col-span-8 space-y-4">
           <div className="flex items-center justify-between mb-4 md:mb-6">
             <h2 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
               Focus Objectives
@@ -361,7 +376,7 @@ export default function Home() {
           )}
         </div>
 
-        <div className="md:col-span-5 lg:col-span-4 space-y-8">
+        <div className="md:col-span-12 lg:col-span-4 space-y-8">
           {completedToday.length > 0 && (
             <section>
               <div className="flex items-center justify-between mb-6">
@@ -425,6 +440,30 @@ export default function Home() {
             isOpen={!!selectedTaskId} 
             onClose={() => setSelectedTaskId(null)} 
           />
+        )}
+      </AnimatePresence>
+
+      {/* Undo Delete Toast */}
+      <AnimatePresence>
+        {undoToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-40 left-6 right-6 md:bottom-12 md:right-12 md:left-auto md:w-auto md:min-w-[320px] md:translate-x-0 z-[100] glass rounded-2xl px-6 py-4 card-shadow flex items-center justify-between gap-6 border border-white/10"
+          >
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm text-white/90 font-medium">
+                Deleted — {undoToast.title.length > 20 ? undoToast.title.substring(0, 20) + '...' : undoToast.title}
+              </span>
+            </div>
+            <button
+              onClick={handleUndo}
+              className="px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-xl text-xs font-black uppercase tracking-widest transition-all border border-primary/20 active:scale-95"
+            >
+              Undo
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
 
