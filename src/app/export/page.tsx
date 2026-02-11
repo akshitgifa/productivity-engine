@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase";
 import { db } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
+import { ProjectSelector } from "@/components/ui/ProjectSelector";
+import { CustomDateTimePicker } from "@/components/ui/CustomDateTimePicker";
 import {
   CalendarDays,
   CheckCircle2,
@@ -356,25 +358,17 @@ export default function ExportPage() {
                     ))}
                   </div>
                   {preset === "custom" && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">Start</label>
-                        <input
-                          type="date"
-                          value={customStart}
-                          onChange={(event) => setCustomStart(event.target.value)}
-                          className="w-full rounded-xl bg-void border border-border/40 px-3 py-2 text-xs text-white"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">End</label>
-                        <input
-                          type="date"
-                          value={customEnd}
-                          onChange={(event) => setCustomEnd(event.target.value)}
-                          className="w-full rounded-xl bg-void border border-border/40 px-3 py-2 text-xs text-white"
-                        />
-                      </div>
+                    <div className="space-y-4">
+                      <CustomDateTimePicker
+                        label="Start"
+                        value={customStart ? new Date(customStart).toISOString() : ""}
+                        onChange={(val) => setCustomStart(val ? val.split('T')[0] : "")}
+                      />
+                      <CustomDateTimePicker
+                        label="End"
+                        value={customEnd ? new Date(customEnd).toISOString() : ""}
+                        onChange={(val) => setCustomEnd(val ? val.split('T')[0] : "")}
+                      />
                     </div>
                   )}
                   {preset === "duration" && (
@@ -390,15 +384,15 @@ export default function ExportPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">Unit</label>
-                        <select
-                          value={durationUnit}
-                          onChange={(event) => setDurationUnit(event.target.value as "hours" | "days")}
-                          className="w-full rounded-xl bg-void border border-border/40 px-3 py-2 text-xs text-white"
-                        >
-                          <option value="hours">Hours</option>
-                          <option value="days">Days</option>
-                        </select>
+                        <ProjectSelector
+                          label="Unit"
+                          projects={[
+                            { id: "hours", name: "Hours" },
+                            { id: "days", name: "Days" }
+                          ]}
+                          selectedProjectId={durationUnit}
+                          onSelect={(id) => setDurationUnit(id as "hours" | "days")}
+                        />
                       </div>
                     </div>
                   )}

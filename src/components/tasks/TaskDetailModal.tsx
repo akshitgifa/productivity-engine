@@ -32,6 +32,8 @@ import remarkGfm from "remark-gfm";
 import { getProjectColor } from "@/lib/colors";
 import { formatDistanceToNow } from "date-fns";
 import { NoteEditor } from "@/components/notes/NoteEditor";
+import { ProjectSelector } from "@/components/ui/ProjectSelector";
+import { CustomDateTimePicker } from "@/components/ui/CustomDateTimePicker";
 
 interface TaskDetailModalProps {
   task: Task;
@@ -336,20 +338,16 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
           <div className="px-8 pt-8 pb-6 border-b border-border/10">
             <div className="flex justify-between items-start mb-4">
               <div className="flex-1 mr-4">
-                <select 
-                    className="text-[10px] font-bold uppercase tracking-[0.3em] mb-2 block font-mono bg-transparent border-none outline-none cursor-pointer hover:opacity-80 transition-all appearance-none"
-                    style={{ color: projectColor }}
-                    value={task.projectId || "NONE"}
-                    onChange={(e) => {
-                        const val = e.target.value === "NONE" ? null : e.target.value;
+                <ProjectSelector
+                    projects={projects}
+                    selectedProjectId={task.projectId || "NONE"}
+                    onSelect={(id) => {
+                        const val = id === "NONE" ? null : id;
                         updateTaskMutation.mutate({ project_id: val });
                     }}
-                >
-                    <option value="NONE" className="bg-void text-zinc-400">Inbox</option>
-                    {projects.map(p => (
-                        <option key={p.id} value={p.id} className="bg-void text-zinc-300">{p.name}</option>
-                    ))}
-                </select>
+                    label=""
+                    className="mb-2"
+                />
                 
                 {isEditingTitle ? (
                     <input 
@@ -417,45 +415,14 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
                 </div>
                 
                 <div className="flex flex-col gap-2 min-w-[200px]">
-                    <div className={cn(
-                        "bg-void/50 border border-border/20 rounded-xl flex items-center gap-3 px-4 py-2 hover:border-primary/30 transition-all cursor-pointer group/deadline",
-                        task.dueDate && "border-primary/20"
-                    )}>
-                        <Calendar size={14} className="text-zinc-500 group-hover/deadline:text-primary transition-colors shrink-0" />
-                        <input 
-                            type="datetime-local"
-                            className="bg-transparent border-none outline-none text-[10px] font-bold uppercase tracking-widest outline-none w-full"
-                            style={{ color: projectColor }}
-                            value={task.dueDate ? new Date(new Date(task.dueDate).getTime() - new Date(task.dueDate).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ""}
-                            onChange={(e) => {
-                                const val = e.target.value;
+                    <div className="flex-1 min-w-[200px]">
+                        <CustomDateTimePicker
+                            label=""
+                            value={task.dueDate ? (task.dueDate instanceof Date ? task.dueDate.toISOString() : task.dueDate) : ""}
+                            onChange={(val) => {
                                 updateTaskMutation.mutate({ due_date: val ? new Date(val).toISOString() : null });
                             }}
                         />
-                    </div>
-                    <div className="flex gap-1.5 ml-1">
-                        {[
-                            { label: 'None', value: null },
-                            { label: 'EOD', value: (() => {
-                                const d = new Date();
-                                d.setHours(23, 59, 59, 999);
-                                return d.toISOString();
-                            })() },
-                            { label: 'Tmrw', value: (() => {
-                                const d = new Date();
-                                d.setDate(d.getDate() + 1);
-                                d.setHours(23, 59, 59, 999);
-                                return d.toISOString();
-                            })() }
-                        ].map(opt => (
-                            <button
-                                key={opt.label || 'none'}
-                                onClick={() => updateTaskMutation.mutate({ due_date: opt.value })}
-                                className="px-2 py-0.5 rounded-md border border-border/20 text-[8px] font-bold uppercase tracking-widest text-zinc-500 hover:text-primary hover:border-primary/30 transition-all bg-void/30"
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
                     </div>
                 </div>
 

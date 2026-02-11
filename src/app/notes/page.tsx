@@ -19,6 +19,7 @@ import {
 import { motion, AnimatePresence, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { cn } from "@/lib/utils";
+import { ProjectSelector } from "@/components/ui/ProjectSelector";
 
 import { db } from "@/lib/db";
 import { processOutbox } from "@/lib/sync";
@@ -144,18 +145,13 @@ export default function NotesPage() {
         </div>
 
         <div className="flex w-full md:w-auto gap-3">
-          <div className="relative group">
-            <Filter size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-primary transition-colors" />
-            <select 
-              className="bg-void/50 border border-border/20 rounded-xl pl-10 pr-8 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 outline-none focus:border-primary/40 transition-all appearance-none cursor-pointer"
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-            >
-              <option value="all">All Projects</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+          <div className="w-full md:w-64">
+            <ProjectSelector
+              label=""
+              projects={projects}
+              selectedProjectId={selectedProjectId}
+              onSelect={(id) => setSelectedProjectId(id)}
+            />
           </div>
 
           <div className="bg-void/50 border border-border/20 rounded-xl p-1 flex">

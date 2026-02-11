@@ -10,6 +10,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { db } from "@/lib/db";
 import { processOutbox } from "@/lib/sync";
+import { ProjectSelector } from "./ProjectSelector";
+import { CustomDateTimePicker } from "./CustomDateTimePicker";
 
 interface QuickCaptureDrawerProps {
   isOpen: boolean;
@@ -541,74 +543,27 @@ export function QuickCaptureDrawer({
                         </div>
                       </div>
 
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest ml-1">Project</label>
-                        <select 
-                          className="w-full bg-void border border-border rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none appearance-none"
-                          value={manualData.projectId}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === "NONE") {
-                               setManualData({ ...manualData, projectId: "NONE", projectName: "Inbox" });
+                      <div className="space-y-1.5 overflow-visible">
+                        <ProjectSelector
+                          label="Project"
+                          projects={projects}
+                          selectedProjectId={manualData.projectId}
+                          onSelect={(id, name) => {
+                            if (id === "NONE") {
+                              setManualData({ ...manualData, projectId: "NONE", projectName: "Inbox" });
                             } else {
-                               const p = projects.find((p: any) => p.id === val);
-                               setManualData({ ...manualData, projectId: val, projectName: p?.name || "" });
+                              setManualData({ ...manualData, projectId: id, projectName: name });
                             }
                           }}
-                        >
-                          <option value="NONE">Inbox</option>
-                          {projects.map((p: any) => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                        </select>
+                        />
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest ml-1">Deadline</label>
-                        <div className="space-y-2">
-                            <input 
-                              type="datetime-local"
-                              className="w-full bg-void border border-border rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-zinc-800 text-zinc-300"
-                              value={manualData.dueDate}
-                              onChange={(e) => setManualData({ ...manualData, dueDate: e.target.value })}
-                            />
-                            <div className="flex gap-1.5 flex-wrap">
-                              {[
-                                { label: 'None', value: '' },
-                                { label: 'Today', value: (() => {
-                                    const d = new Date();
-                                    d.setHours(23, 59, 59, 999); // Final moments of the day
-                                    return d.toISOString().slice(0, 16);
-                                })() },
-                                { label: 'Tmrw', value: (() => {
-                                    const d = new Date();
-                                    d.setDate(d.getDate() + 1);
-                                    d.setHours(23, 59, 59, 999); // Tomorrow end of day
-                                    return d.toISOString().slice(0, 16);
-                                })() },
-                                { label: 'Next Mon', value: (() => {
-                                    const d = new Date();
-                                    d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7 || 7);
-                                    d.setHours(23, 59, 59, 999); // Next Monday end of day
-                                    return d.toISOString().slice(0, 16);
-                                })() }
-                              ].map(suggest => (
-                                <button
-                                  key={suggest.label}
-                                  type="button"
-                                  onClick={() => setManualData({ ...manualData, dueDate: suggest.value })}
-                                  className={cn(
-                                    "px-2 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-tight transition-all",
-                                    manualData.dueDate === suggest.value 
-                                      ? "bg-primary text-void" 
-                                      : "bg-void border border-border text-zinc-600 hover:border-zinc-700"
-                                  )}
-                                >
-                                  {suggest.label}
-                                </button>
-                              ))}
-                            </div>
-                        </div>
+                        <CustomDateTimePicker
+                          label="Deadline"
+                          value={manualData.dueDate}
+                          onChange={(val) => setManualData({ ...manualData, dueDate: val })}
+                        />
                       </div>
                     </div>
                   )}

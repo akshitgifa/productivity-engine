@@ -19,6 +19,7 @@ import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { mapTaskData, sortTasksByUserOrder, Task } from "@/lib/engine";
 import { taskService } from "@/lib/taskService";
 import { getProjectColor, hexToRgba, PRESET_COLORS } from "@/lib/colors";
+import { ProjectSelector } from "@/components/ui/ProjectSelector";
 
 interface Project {
   id: string;
@@ -310,17 +311,17 @@ export default function ProjectDetailPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Priority</label>
-                  <select 
-                    className="w-full bg-void border border-border/50 rounded-2xl px-4 py-3 text-sm outline-none focus:border-primary/50 transition-all font-medium appearance-none"
-                    value={editForm.tier}
-                    onChange={(e) => setEditForm({...editForm, tier: parseInt(e.target.value)})}
-                  >
-                    <option value={1}>1 - Critical</option>
-                    <option value={2}>2 - Growth</option>
-                    <option value={3}>3 - Maintenance</option>
-                    <option value={4}>4 - Icebox</option>
-                  </select>
+                  <ProjectSelector
+                    label="Priority"
+                    projects={[
+                      { id: "1", name: "1 - Critical" },
+                      { id: "2", name: "2 - Growth" },
+                      { id: "3", name: "3 - Maintenance" },
+                      { id: "4", name: "4 - Icebox" }
+                    ]}
+                    selectedProjectId={editForm.tier.toString()}
+                    onSelect={(id) => setEditForm({ ...editForm, tier: parseInt(id) })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Decay</label>
