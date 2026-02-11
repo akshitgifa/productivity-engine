@@ -30,7 +30,7 @@ The next evolution focus on three pillars:
 
 ## Environment & Tooling
 - **Package Manager:** Use `pnpm` exclusively. Never use `npm` or `yarn`.
-- **Primary Stack:** Next.js 15 (App Router), Supabase (PostgreSQL + Realtime + pgvector), Vercel AI SDK (Gemini-2.0-flash).
+- **Primary Stack:** Next.js 15 (App Router), Dexie.js (Local Storage), Supabase (Cloud Sync + pgvector), Vercel AI SDK (Gemini-2.0-flash).
 - **Styling:** **Vanilla CSS only.** Avoid Tailwind CSS unless specifically requested. Maintain a "High-Performance Minimalism" aesthetic.
 
 ## Development Flow
@@ -42,6 +42,7 @@ The next evolution focus on three pillars:
     - Only proceed to the next phase after user confirmation.
 
 ## Code Integrity
+- **Local-First Pattern:** All data operations MUST prioritize the local Dexie database. 
+- **Mutations:** Use the "Dexie + Outbox" pattern for all writes. Never write directly to Supabase from the client.
 - **Engine Logic:** `src/lib/engine.ts` is the single source of truth for urgency math.
-- **Supabase Security:** Use the service role key for system-level operations in server environments.
 - **AI Integration:** Use Vercel AI SDK for all AI Assistant interactions. Ensure multi-step tool calls are enabled.

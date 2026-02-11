@@ -35,6 +35,19 @@ Execution is divided into 5 testable phases. **USER MUST TEST AFTER EACH PHASE.*
 
 ---
 
+## Phase 2.5: Local-First Hardening ✅
+**Goal:** Universal offline support and real-time sync transparency.
+
+### Tasks
+- [x] **2.5.1 Migration:** Move all remaining pages (`Portfolio`, `Review`, `Home Prefs`) from direct Supabase reads to Dexie/localStorage.
+- [x] **2.5.2 Resilience:** Hardened `mapTaskData` to prevent "Inbox" glitch during initial data sync.
+- [x] **2.5.3 UI:** Build global `SyncIndicator` (Top progress bar for initial fetch, floating pill for outbox push).
+- [x] **2.5.4 DevEx:** Eliminate React Query collisions between Home and Task Manager via unique keys.
+
+**TESTED ✅:** App works fully offline for all core views. Sync status is visible and non-glitchy.
+
+---
+
 ## Phase 3: Background Intelligence (The Subconscious)
 **Goal:** Subagents and web research.
 

@@ -11,7 +11,8 @@
 - [x] Task enrichment (notes, subtasks, deadlines, recurrence)
 - [x] Notes page with AI refinement and markdown editing
 - [x] Export / screenshot mode with privacy controls
-- [x] Local-first architecture (Dexie + outbox sync)
+- [x] Local-first data architecture (Dexie + outbox sync)
+- [x] Global Sync Status Indicator (progress bar + outbox pill)
 - [x] Centralized `taskService.ts` for all task mutations
 - [x] Deadline-aware sorting with manual override
 - [x] Sort compaction on task completion

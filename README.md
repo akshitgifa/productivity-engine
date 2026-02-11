@@ -12,14 +12,19 @@ Entropy is a high-performance productivity engine for power users managing multi
 ## Architecture
 
 ### Local-First (Offline-Ready)
-All task mutations go through **`src/lib/taskService.ts`** — a centralized service that writes to Dexie (IndexedDB), records to an outbox, and syncs to Supabase in the background. The app works offline and syncs when connectivity returns.
+The application follows a strict **Local-First** pattern. Nearly all reads query the local Dexie.js (IndexedDB) instance for zero-latency performance. All mutations (tasks, projects, notes, etc.) are written locally and recorded in a **Sync Outbox**, which is processed in the background to keep Supabase in sync. This ensures the app remains fully functional offline.
+
+### Global Sync Status
+A subtle, global **Sync Indicator** provides real-time feedback:
+- **Initial Sync**: A progress bar tracks the loading of historical data from Supabase.
+- **Background Push**: A floating "Saving" indicator appears when the outbox is being processed.
 
 ### Deadline-Aware Sorting
 Tasks are sorted via **`sortTasksByUserOrder()`** in `src/lib/engine.ts`:
-1. **Deadlined tasks** float above non-deadlined tasks
-2. Among deadlined: manual drag order (`sort_order > 0`) overrides deadline sort; unranked tasks sort by soonest deadline
-3. **Non-deadlined tasks** sort by manual drag order
-4. **Urgency score** serves as the final tiebreaker
+1. **Deadlined tasks** float above non-deadlined tasks.
+2. Among deadlined: manual drag order (`sort_order > 0`) overrides deadline sort; unranked tasks sort by soonest deadline.
+3. **Non-deadlined tasks** sort by manual drag order.
+4. **Urgency score** serves as the final tiebreaker.
 
 Setting a deadline resets `sort_order` to 0 (enters deadline pool). Dragging assigns an explicit order that persists.
 
@@ -30,7 +35,8 @@ Setting a deadline resets `sort_order` to 0 (enters deadline pool). Dragging ass
 | `src/lib/taskService.ts`          | Centralized task mutations (Dexie + outbox) with business rules |
 | `src/lib/ai/tools.ts`             | AI tool registry (15+ tools with God Mode access)               |
 | `src/hooks/useTaskFulfillment.ts` | Task completion, recurrence, project rejuvenation               |
-| `src/lib/sync.ts`                 | Outbox sync to Supabase                                         |
+| `src/lib/sync.ts`                 | Multi-table outbox sync to Supabase                             |
+| `src/store/syncStore.ts`          | Global sync state management                                    |
 
 ---
 
