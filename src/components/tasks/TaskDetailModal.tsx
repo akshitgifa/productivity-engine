@@ -438,13 +438,13 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
                             { label: 'None', value: null },
                             { label: 'EOD', value: (() => {
                                 const d = new Date();
-                                d.setHours(18, 0, 0, 0);
+                                d.setHours(23, 59, 59, 999);
                                 return d.toISOString();
                             })() },
                             { label: 'Tmrw', value: (() => {
                                 const d = new Date();
                                 d.setDate(d.getDate() + 1);
-                                d.setHours(9, 0, 0, 0);
+                                d.setHours(23, 59, 59, 999);
                                 return d.toISOString();
                             })() }
                         ].map(opt => (

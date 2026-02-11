@@ -577,19 +577,19 @@ export function QuickCaptureDrawer({
                                 { label: 'None', value: '' },
                                 { label: 'Today', value: (() => {
                                     const d = new Date();
-                                    d.setHours(18, 0, 0, 0); // Default to 6 PM
+                                    d.setHours(23, 59, 59, 999); // Final moments of the day
                                     return d.toISOString().slice(0, 16);
                                 })() },
                                 { label: 'Tmrw', value: (() => {
                                     const d = new Date();
                                     d.setDate(d.getDate() + 1);
-                                    d.setHours(9, 0, 0, 0); // Default to tomorrow 9 AM
+                                    d.setHours(23, 59, 59, 999); // Tomorrow end of day
                                     return d.toISOString().slice(0, 16);
                                 })() },
                                 { label: 'Next Mon', value: (() => {
                                     const d = new Date();
                                     d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7 || 7);
-                                    d.setHours(9, 0, 0, 0);
+                                    d.setHours(23, 59, 59, 999); // Next Monday end of day
                                     return d.toISOString().slice(0, 16);
                                 })() }
                               ].map(suggest => (
