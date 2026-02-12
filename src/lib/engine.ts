@@ -25,7 +25,7 @@ export interface Task {
   plannedDate?: string;
 }
 
-export type SessionMode = 'Deep Work' | 'Low Energy' | 'Creative' | 'Admin';
+export type SessionMode = 'Deep' | 'Shallow';
 
 const TIER_WEIGHTS: Record<ProjectTier, number> = {
   1: 2.0,
@@ -35,10 +35,8 @@ const TIER_WEIGHTS: Record<ProjectTier, number> = {
 };
 
 const MODE_TAG_MAP: Record<SessionMode, Task['energyTag'][]> = {
-  'Deep Work': ['Deep', 'Normal'],
-  'Low Energy': ['Shallow'],
-  'Creative': ['Deep'],
-  'Admin': ['Shallow'],
+  'Deep': ['Deep', 'Normal'],
+  'Shallow': ['Shallow', 'Normal'],
 };
 
 export function calculateUrgencyScore(task: Task, currentMode: SessionMode): number {

@@ -7,10 +7,8 @@ import { cn } from "@/lib/utils";
 import { Zap, Coffee, Brain, Sparkles } from "lucide-react";
 
 const MODES: { label: SessionMode; icon: any; color: string }[] = [
-  { label: "Deep Work", icon: Brain, color: "text-primary" },
-  { label: "Creative", icon: Sparkles, color: "text-tier-2" },
-  { label: "Low Energy", icon: Coffee, color: "text-tier-3" },
-  { label: "Admin", icon: Zap, color: "text-zinc-500" },
+  { label: "Deep", icon: Brain, color: "text-primary" },
+  { label: "Shallow", icon: Coffee, color: "text-tier-3" },
 ];
 
 export function ModeSelector() {
@@ -36,7 +34,7 @@ export function ModeSelector() {
               "text-[8px] font-bold uppercase tracking-widest",
               isActive ? "text-zinc-200" : "text-zinc-600"
             )}>
-              {m.label.split(" ")[0]}
+              {m.label}
             </span>
           </button>
         );

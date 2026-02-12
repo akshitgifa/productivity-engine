@@ -12,7 +12,7 @@ interface UserState {
 }
 
 export const useUserStore = create<UserState>((set) => ({
-  mode: "Deep Work",
+  mode: 'Deep',
   timeAvailable: null, // null means "All Time"
   setMode: (mode) => set({ mode }),
   setTimeAvailable: (timeAvailable) => set({ timeAvailable }),

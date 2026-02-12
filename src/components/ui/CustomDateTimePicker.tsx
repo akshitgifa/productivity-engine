@@ -5,26 +5,31 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Calendar as CalendarIcon, Clock, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, startOfDay, addDays, getDay, isWeekend } from "date-fns";
+import { toLocalISOString } from "@/lib/dateUtils";
 
 interface CustomDateTimePickerProps {
-  value: string; // ISO string or empty
-  onChange: (value: string) => void;
   label?: string;
+  value: string; // ISO string or empty
+  onChange: (val: string) => void;
   className?: string;
 }
 
-export function CustomDateTimePicker({
-  value,
-  onChange,
-  label = "Deadline",
-  className,
-}: CustomDateTimePickerProps) {
+export function CustomDateTimePicker({ label = "Deadline", value, onChange, className }: CustomDateTimePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"date" | "time">("date");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [tempDate, setTempDate] = useState<Date | null>(value ? new Date(value) : null);
+
+  const today = new Date();
+  today.setHours(23, 59, 59, 999); // Set to end of day for suggestion
+  const todayStr = toLocalISOString(today);
+  
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(23, 59, 59, 999); // Set to end of day for suggestion
+  const tomorrowStr = toLocalISOString(tomorrow);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
