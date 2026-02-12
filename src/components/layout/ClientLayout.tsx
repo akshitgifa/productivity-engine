@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Navigation } from "@/components/layout/Navigation";
 import { SplashScreen } from "@/components/ui/SplashScreen";
 import { SyncIndicator } from "@/components/ui/SyncIndicator";
+import { ToastContainer } from "@/components/ui/ToastContainer";
 import { initialSync, setupSubscriptions } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
@@ -45,6 +46,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     <QueryProvider>
       <SplashScreen />
       <SyncIndicator />
+      <ToastContainer />
       <main className={cn("min-h-screen", !isChat && !isExport && "pb-24")}>
         {children}
       </main>

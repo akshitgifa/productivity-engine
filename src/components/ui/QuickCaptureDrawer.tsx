@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { db } from "@/lib/db";
 import { processOutbox } from "@/lib/sync";
+import { useToastStore } from "@/store/toastStore";
 import { ProjectSelector } from "./ProjectSelector";
 import { CustomDateTimePicker } from "./CustomDateTimePicker";
 
@@ -36,6 +37,7 @@ export function QuickCaptureDrawer({
   const [isProcessing, setIsProcessing] = useState(false);
   
   const queryClient = useQueryClient();
+  const { addToast } = useToastStore();
 
   // 1. Fetch Projects Query from local DB
   const { data: projects = [] } = useQuery({
@@ -139,7 +141,7 @@ export function QuickCaptureDrawer({
       processOutbox().catch(() => {});
     },
     onMutate: async (newResult) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks', 'active'] });
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
       const previousTasks = queryClient.getQueryData<any[]>(['tasks', 'active']);
       
       if (previousTasks && newResult) {
@@ -169,10 +171,11 @@ export function QuickCaptureDrawer({
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', 'active'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['analytics'] });
     },
     onSuccess: () => {
+      addToast("Task created successfully", "success");
       onClose();
       resetState();
     }
@@ -210,6 +213,7 @@ export function QuickCaptureDrawer({
       processOutbox().catch(() => {});
     },
     onSuccess: () => {
+      addToast("Thought captured", "success");
       queryClient.invalidateQueries({ queryKey: ['notes'] });
       queryClient.invalidateQueries({ queryKey: ['unread_thoughts'] });
       onClose();

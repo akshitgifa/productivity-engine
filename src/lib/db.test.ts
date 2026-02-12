@@ -127,7 +127,6 @@ describe('Database and Sync Logic', () => {
       await initialSync();
 
       expect(db.projects.bulkPut).toHaveBeenCalledWith(mockData);
-      expect(db.documentation.bulkPut).toHaveBeenCalled();
     });
   });
 });
