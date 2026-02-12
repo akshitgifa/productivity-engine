@@ -87,8 +87,9 @@ export function QuickCaptureDrawer({
       let finalProjectId = result.projectId;
 
       // Handle "None" or "Inbox" project
-      if (finalProjectId === "NONE") {
-        finalProjectId = undefined;
+      const INBOX_ID = 'c0ffee00-0000-0000-0000-000000000000';
+      if (finalProjectId === "NONE" || result.project?.toLowerCase() === "inbox") {
+        finalProjectId = INBOX_ID;
       }
 
       if (!finalProjectId && result.project && result.project !== "None" && result.project !== "NONE") {

@@ -77,7 +77,6 @@ export function NoteEditor({ note, onClose }: NoteEditorProps) {
     mutationFn: async (updates: Partial<Note>) => {
       // Dexie doesn't like null in updates if they don't match the schema perfectly
       const cleanUpdates: any = { ...updates, updated_at: new Date().toISOString() };
-      if (cleanUpdates.project_id === null) cleanUpdates.project_id = undefined;
       
       await db.notes.update(note.id, cleanUpdates);
       await db.recordAction("notes", "update", { id: note.id, ...cleanUpdates });
@@ -191,14 +190,14 @@ export function NoteEditor({ note, onClose }: NoteEditorProps) {
                  <select 
                    className="text-[9px] font-black uppercase tracking-[0.3em] font-mono bg-zinc-900/50 border border-border/20 rounded-lg px-3 h-full cursor-pointer hover:border-primary/40 transition-all appearance-none pr-7"
                    style={{ color: projectColor }}
-                   value={projectId || "NONE"}
+                   value={projectId || "c0ffee00-0000-0000-0000-000000000000"}
                    onChange={(e) => {
-                     const val = e.target.value === "NONE" ? null : e.target.value;
+                     const val = e.target.value;
                      setProjectId(val);
                      updateMutation.mutate({ project_id: val });
                    }}
                  >
-                   <option value="NONE" className="bg-void text-zinc-400">Inbox</option>
+                   <option value="c0ffee00-0000-0000-0000-000000000000" className="bg-void text-zinc-400">Inbox</option>
                    {projects.map(p => (
                      <option key={p.id} value={p.id} className="bg-void text-zinc-300">{p.name}</option>
                    ))}

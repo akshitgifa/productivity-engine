@@ -79,7 +79,7 @@ export function getTools(supabase: SupabaseClient, google: any) {
     list_tasks: {
       description: 'Search and filter tasks. Returns a list of tasks based on filters.',
       inputSchema: z.object({
-        projectId: z.string().uuid().optional().describe('Filter by Project UUID'),
+        projectId: z.string().optional().describe('Filter by Project ID (use "c0ffee00-0000-0000-0000-000000000000" for Inbox)'),
         state: z.enum(['Active', 'Waiting', 'Blocked', 'Done']).optional(),
         query: z.string().optional().describe('Search term for task title'),
         limit: z.number().default(20),
@@ -108,7 +108,7 @@ export function getTools(supabase: SupabaseClient, google: any) {
       description: 'Create a new task in Entropy.',
       inputSchema: z.object({
         title: z.string().describe('The title of the task'),
-        projectId: z.string().uuid().describe('The EXACT UUID of the project (project_id)'),
+        projectId: z.string().optional().describe('The ID of the project. Defaults to "c0ffee00-0000-0000-0000-000000000000" (Inbox) if not provided.'),
         description: z.string().optional(),
         state: z.enum(['Active', 'Waiting', 'Blocked', 'Done']).default('Active'),
         due_date: z.string().optional().describe('ISO timestamp or YYYY-MM-DD'),
@@ -126,7 +126,7 @@ export function getTools(supabase: SupabaseClient, google: any) {
 
           const insertData = applyTaskUpdateRules({
             title: taskData.title,
-            project_id: taskData.projectId,
+            project_id: taskData.projectId || 'c0ffee00-0000-0000-0000-000000000000',
             description: taskData.description,
             state: taskData.state,
             due_date: sanitizedDueDate,

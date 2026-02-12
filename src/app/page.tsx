@@ -61,13 +61,8 @@ export default function Home() {
     }
   });
 
+
   // Load home filters from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('home_project_filters');
-      if (saved) setProjectFilters(JSON.parse(saved));
-    } catch {}
-  }, []);
 
   const saveFilters = (nextFilters: string[]) => {
     setProjectFilters(nextFilters);
@@ -177,7 +172,7 @@ export default function Home() {
   let filteredTasks = allActive;
   if (projectFilters.length > 0) {
     filteredTasks = allActive.filter((t) => {
-      const isInbox = !t.projectId;
+      const isInbox = t.projectId === 'c0ffee00-0000-0000-0000-000000000000';
       if (isInbox) return projectFilters.includes('INBOX');
       return projectFilters.includes(t.projectId);
     });

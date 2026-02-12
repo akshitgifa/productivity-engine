@@ -342,10 +342,9 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
               <div className="flex-1 mr-4">
                 <ProjectSelector
                     projects={projects}
-                    selectedProjectId={task.projectId || "NONE"}
+                    selectedProjectId={task.projectId || "c0ffee00-0000-0000-0000-000000000000"}
                     onSelect={(id) => {
-                        const val = id === "NONE" ? null : id;
-                        updateTaskMutation.mutate({ project_id: val });
+                        updateTaskMutation.mutate({ project_id: id });
                     }}
                     label=""
                     className="mb-2"

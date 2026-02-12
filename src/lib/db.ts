@@ -18,6 +18,8 @@ export interface Project {
   kpi_name?: string;
   kpi_value: number;
   color?: string;
+  is_deleted?: boolean;
+  is_archived?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -132,6 +134,33 @@ export class EntropyDatabase extends Dexie {
       data,
       timestamp: Date.now()
     });
+  }
+
+  /**
+   * Ensures a persistent "Inbox" project exists and returns its ID.
+   */
+  async ensureInbox(): Promise<string> {
+    const INBOX_ID = 'c0ffee00-0000-0000-0000-000000000000';
+    const existing = await this.projects.get(INBOX_ID);
+    
+    if (!existing) {
+      const now = new Date().toISOString();
+      const inbox = {
+        id: INBOX_ID,
+        name: 'Inbox',
+        tier: 4, // Lowest tier for Inbox
+        decay_threshold_days: 15,
+        last_touched_at: now,
+        kpi_value: 0,
+        color: '#71717a',
+        created_at: now,
+        updated_at: now
+      };
+      await this.projects.add(inbox);
+      await this.recordAction('projects', 'insert', inbox);
+    }
+    
+    return INBOX_ID;
   }
 }
 

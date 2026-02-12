@@ -69,8 +69,8 @@ export function ProjectSelector({
   };
 
   const projectList = [
-    { id: "NONE", name: "Inbox", color: "#71717a" },
-    ...projects.map((p) => ({
+    { id: "c0ffee00-0000-0000-0000-000000000000", name: "Inbox", color: "#71717a" },
+    ...projects.filter(p => p.id !== 'c0ffee00-0000-0000-0000-000000000000').map((p) => ({
       id: p.id,
       name: p.name,
       color: getProjectColor(p.name, p.color),

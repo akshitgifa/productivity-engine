@@ -214,6 +214,9 @@ export async function initialSync() {
   store.setPhase('syncing');
   store.setProgress(0);
 
+  // Ensure Inbox project exists locally
+  await db.ensureInbox();
+
   // Push local changes BEFORE pulling remote ones
   await _processOutboxBatched();
 
