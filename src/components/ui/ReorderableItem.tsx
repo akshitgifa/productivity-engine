@@ -128,6 +128,11 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
     }
   }, [clearHoldTimer]);
 
+  const handlePointerUp = useCallback(() => {
+    clearHoldTimer();
+    startPos.current = null;
+  }, [clearHoldTimer]);
+
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (disableDrag) return; 
     
@@ -165,7 +170,10 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
       whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 100 }}
       onDragEnd={onDragEndInternal}
       onDrag={(_, info) => {
-        setDragOffset({ x: info.offset.x, y: info.offset.y });
+        // Only update if significantly changed to avoid loop
+        if (Math.abs(info.offset.x - dragOffset.x) > 0.5 || Math.abs(info.offset.y - dragOffset.y) > 0.5) {
+          setDragOffset({ x: info.offset.x, y: info.offset.y });
+        }
       }}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       as="div"
@@ -175,6 +183,8 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
         ref={itemRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         className="transition-all duration-150 select-none"
       >
         {clonedChild}

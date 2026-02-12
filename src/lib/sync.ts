@@ -120,6 +120,11 @@ async function _processOutboxBatched() {
   store.setPhase('idle');
   store.setPendingCount(0);
   syncInProgress = false;
+
+  // Dispatch global event to notify UI to refresh
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('entropy:sync-complete'));
+  }
 }
 
 // ─── Incremental Sync (Merge Logic) ─────────────────────────────────────────
@@ -199,6 +204,9 @@ export function setupSubscriptions() {
       } else if (eventType === 'DELETE') {
         await (db as any)[table].delete(oldRow.id);
       }
+
+      // Notify UI of change
+      window.dispatchEvent(new CustomEvent('entropy:sync-complete', { detail: { table, eventType } }));
     })
     .subscribe();
 
@@ -235,6 +243,11 @@ export async function initialSync() {
 
   store.setPhase('idle');
   console.log('[Sync] Synchronization complete.');
+
+  // Notify UI to refresh after initial pull
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('entropy:sync-complete'));
+  }
 }
 
 // ─── Local Archival ────────────────────────────────────────────────────────

@@ -161,25 +161,23 @@ export function FocusCard({
         </div>
       )}
 
-      {/* Persistent Action for Syllabus View (Add/Remove from Today) */}
-      {!isMobile && onPlannedChange && (
-        <button 
-          onClick={(e) => { e.stopPropagation(); onPlannedChange(!isPlanned); }}
-          className={cn(
-            "absolute bottom-5 right-5 w-8 h-8 rounded-lg border flex items-center justify-center transition-all z-20 group-hover:scale-110 pointer-events-auto",
-            isPlanned 
-              ? "bg-primary text-void border-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.2)]" 
-              : "bg-surface/10 border-border/20 text-zinc-600 hover:border-primary/40 hover:text-primary opacity-0 group-hover:opacity-100"
-          )}
-          title={isPlanned ? "In Today's Agenda" : "Add to Today"}
-        >
-          {isPlanned ? <Check size={14} strokeWidth={4} /> : <span className="text-sm font-black">+</span>}
-        </button>
-      )}
-
       {/* PC Hover Actions */}
       {!isMobile && (
         <div className="absolute inset-0 bg-void/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-2xl flex items-center justify-center gap-4 z-10 pointer-events-auto">
+          {onPlannedChange && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onPlannedChange(!isPlanned); }}
+              className={cn(
+                "w-12 h-12 rounded-full border flex items-center justify-center transition-all",
+                isPlanned 
+                  ? "bg-primary text-void border-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]" 
+                  : "bg-surface/10 border-border/20 text-zinc-500 hover:border-zinc-300 hover:text-zinc-200"
+              )}
+              title={isPlanned ? "Remove from Today" : "Add to Today"}
+            >
+              <span className="text-xl font-black">+</span>
+            </button>
+          )}
           {onComplete && (
             <button 
               onClick={(e) => { e.stopPropagation(); onComplete(); }}

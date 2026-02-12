@@ -174,9 +174,19 @@ export default function Home() {
   }, [deleteMutation]);
 
   const toggleCommitment = useCallback(async (taskId: string, currentPlanned: boolean) => {
-    const nextPlanned = currentPlanned ? null : new Date().toISOString();
+    // Standardize: Store as local YYYY-MM-DD instead of UTC ISO to avoid timezone shifts
+    const nextPlanned = currentPlanned ? null : new Date().toLocaleDateString('en-CA');
     await taskService.setPlannedDate(taskId, nextPlanned);
     queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
+  }, [queryClient]);
+
+  // Handle auto-refresh from sync events
+  useEffect(() => {
+    const handleSync = () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
+    };
+    window.addEventListener('entropy:sync-complete', handleSync);
+    return () => window.removeEventListener('entropy:sync-complete', handleSync);
   }, [queryClient]);
 
   // 1. Basic Filters (Project + Time)
@@ -197,9 +207,21 @@ export default function Home() {
   let displayTasks = filtered;
   if (viewMode === 'Today') {
     displayTasks = filtered.filter((t: Task) => {
-      const isPlannedToday = t.plannedDate && t.plannedDate.startsWith(todayStr);
+      // Normalize plannedDate: handle both old ISO strings and new local strings
+      let taskPlannedDay = null;
+      if (t.plannedDate) {
+        if (t.plannedDate.includes('T')) {
+          // Legacy ISO format - convert to local date string for comparison
+          taskPlannedDay = new Date(t.plannedDate).toLocaleDateString('en-CA');
+        } else {
+          // New standardized local format (YYYY-MM-DD)
+          taskPlannedDay = t.plannedDate;
+        }
+      }
+
+      const isPlannedToday = taskPlannedDay === todayStr;
       
-      // Compare local date strings
+      // Compare local date strings for due dates
       const taskDueDateStr = t.dueDate ? t.dueDate.toLocaleDateString('en-CA') : null;
       const isDueTodayOrOverdue = taskDueDateStr && taskDueDateStr <= todayStr;
       
