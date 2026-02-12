@@ -24,6 +24,10 @@ export default function Home() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [projectFilters, setProjectFilters] = useState<string[]>([]);
   const [undoToast, setUndoToast] = useState<{ id: string; title: string } | null>(null);
+  const [viewMode, setViewMode] = useState<'Today' | 'Syllabus'>('Today');
+
+  // Use local date string (YYYY-MM-DD) to avoid UTC mismatch
+  const todayStr = new Date().toLocaleDateString('en-CA');
 
   // 1. Fetch Active Tasks Query from Local DB
   const { data: allActive = [], isLoading: isTasksLoading } = useQuery({
@@ -159,26 +163,55 @@ export default function Home() {
     queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
   }, [undoToast, queryClient]);
 
-  // Filter & Logic
-  let filteredTasks = allActive;
+  const handleComplete = useCallback((task: Task) => {
+    if (completeMutation.isPending) return;
+    completeMutation.mutate(task);
+  }, [completeMutation]);
+
+  const handleDelete = useCallback((taskId: string) => {
+    if (deleteMutation.isPending) return;
+    deleteMutation.mutate(taskId);
+  }, [deleteMutation]);
+
+  const toggleCommitment = useCallback(async (taskId: string, currentPlanned: boolean) => {
+    const nextPlanned = currentPlanned ? null : new Date().toISOString();
+    await taskService.setPlannedDate(taskId, nextPlanned);
+    queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
+  }, [queryClient]);
+
+  // 1. Basic Filters (Project + Time)
+  let filtered = allActive;
   if (projectFilters.length > 0) {
-    filteredTasks = allActive.filter((t) => {
+    filtered = allActive.filter((t) => {
       const isInbox = t.projectId === 'c0ffee00-0000-0000-0000-000000000000';
       if (isInbox) return projectFilters.includes('INBOX');
       return projectFilters.includes(t.projectId);
     });
   }
 
-  let constrainedTasks = filteredTasks;
   if (timeAvailable) {
-    constrainedTasks = constrainedTasks.filter(t => t.durationMinutes <= timeAvailable);
+    filtered = filtered.filter(t => t.durationMinutes <= timeAvailable);
   }
 
-  const sortedTasks = sortTasksByUserOrder(constrainedTasks, mode);
+  // 2. View Mode Filters
+  let displayTasks = filtered;
+  if (viewMode === 'Today') {
+    displayTasks = filtered.filter((t: Task) => {
+      const isPlannedToday = t.plannedDate && t.plannedDate.startsWith(todayStr);
+      
+      // Compare local date strings
+      const taskDueDateStr = t.dueDate ? t.dueDate.toLocaleDateString('en-CA') : null;
+      const isDueTodayOrOverdue = taskDueDateStr && taskDueDateStr <= todayStr;
+      
+      return isPlannedToday || isDueTodayOrOverdue;
+    });
+  }
+
+  const sortedTasks = sortTasksByUserOrder(displayTasks, mode);
   const isLoading = isTasksLoading;
 
   // Reorder handler: updates sort_order locally in Dexie and syncs via outbox
-  const handleReorder = async (reorderedTasks: Task[]) => {
+  const handleReorder = useCallback(async (reorderedTasks: Task[]) => {
     // Optimistic UI update via query cache
     const updatedAll = allActive.map(t => {
       const idx = reorderedTasks.findIndex(rt => rt.id === t.id);
@@ -186,11 +219,17 @@ export default function Home() {
       return t;
     });
     queryClient.setQueryData(['tasks', 'today'], updatedAll);
+  }, [allActive, queryClient]);
 
-    // Persist via centralized service
-    const orderedIds = reorderedTasks.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
+  const persistReorder = useCallback(async () => {
+    const tasks = queryClient.getQueryData<Task[]>(['tasks', 'today']);
+    if (!tasks) return;
+    
+    // Sort tasks by their current sort order to ensure they are in the right order for the service
+    const sorted = [...tasks].sort((a, b) => a.sortOrder - b.sortOrder);
+    const orderedIds = sorted.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
     await taskService.reorder(orderedIds);
-  };
+  }, [queryClient]);
 
   const activeFilterCount = projectFilters.length;
 
@@ -220,6 +259,28 @@ export default function Home() {
               <span>EXPORT</span>
             </Link>
           </div>
+        </div>
+
+        {/* View Selection Toggle */}
+        <div className="flex bg-surface/40 backdrop-blur-md border border-border/20 p-1.5 rounded-3xl w-full max-w-[320px] mb-8">
+          <button
+            onClick={() => setViewMode('Today')}
+            className={cn(
+              "flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all",
+              viewMode === 'Today' ? "bg-primary text-void shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+            )}
+          >
+            Today
+          </button>
+          <button
+            onClick={() => setViewMode('Syllabus')}
+            className={cn(
+              "flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all",
+              viewMode === 'Syllabus' ? "bg-primary text-void shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+            )}
+          >
+            Syllabus
+          </button>
         </div>
       </header>
 
@@ -327,10 +388,11 @@ export default function Home() {
               as="div"
             >
               {sortedTasks.map((task) => (
-                <ReorderableItem
-                  key={task.id}
-                  value={task}
-                >
+                  <ReorderableItem
+                    key={task.id}
+                    value={task}
+                    onDragEnd={persistReorder}
+                  >
                   <FocusCard
                     title={task.title}
                     project={task.projectName}
@@ -338,22 +400,60 @@ export default function Home() {
                     duration={task.durationMinutes < 60 ? `${task.durationMinutes}m` : `${Math.floor(task.durationMinutes / 60)}h`}
                     dueDate={task.dueDate}
                     isActive={true}
-                    onComplete={() => {
-                      if (completeMutation.isPending) return;
-                      completeMutation.mutate(task);
-                    }}
-                    onDelete={() => {
-                      if (deleteMutation.isPending) return;
-                      deleteMutation.mutate(task.id);
-                    }}
+                    onComplete={() => handleComplete(task)}
+                    onDelete={() => handleDelete(task.id)}
                     onClick={() => setSelectedTaskId(task.id)}
                     subtasksCount={task.subtasksCount}
                     completedSubtasksCount={task.completedSubtasksCount}
                     projectColor={task.projectColor}
+                    isPlanned={!!task.plannedDate?.startsWith(todayStr)}
+                    onPlannedChange={() => toggleCommitment(task.id, !!task.plannedDate?.startsWith(todayStr))}
                   />
                 </ReorderableItem>
               ))}
             </Reorder.Group>
+          ) : viewMode === 'Today' ? (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="text-center py-24 border border-dashed border-border/30 rounded-[3rem] bg-surface/20">
+                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/20">
+                  <Share2 className="text-primary opacity-40" size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Your Today is empty</h3>
+                <p className="text-zinc-500 text-xs font-medium max-w-[240px] mx-auto mb-8 uppercase tracking-widest leading-relaxed">
+                  The engine is ready. Pick your focus for a productive day.
+                </p>
+                <button 
+                  onClick={() => setViewMode('Syllabus')}
+                  className="px-8 py-4 bg-primary text-void rounded-[2rem] font-black text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all"
+                >
+                  PLAN YOUR DAY
+                </button>
+              </div>
+
+              {/* Recommendations Section */}
+              <div className="space-y-4">
+                <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.3em]">Top Picks from Engine</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  {filtered.slice(0, 3).map(task => (
+                    <div key={task.id} className="bg-surface/40 border border-border/10 rounded-2xl p-4 flex items-center justify-between group hover:border-primary/20 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: task.projectColor || '#10b981' }} />
+                        <div>
+                          <p className="text-sm font-semibold text-zinc-200">{task.title}</p>
+                          <p className="text-[10px] font-bold text-zinc-600 uppercase mt-0.5">{task.projectName}</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => toggleCommitment(task.id, false)}
+                        className="w-10 h-10 rounded-xl border border-border/20 text-zinc-500 flex items-center justify-center hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
+                      >
+                        <span className="text-lg font-black">+</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="text-center py-24 border border-dashed border-border rounded-3xl text-zinc-600 text-[10px] font-bold uppercase tracking-widest bg-surface/30">
               All objectives synchronized

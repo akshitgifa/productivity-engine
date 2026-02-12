@@ -29,6 +29,12 @@ export function applyTaskUpdateRules(updates: Record<string, any>): Record<strin
     result.sort_order = 0;
   }
 
+  // Rule: Setting a planned_date stamps it appropriately
+  if ('planned_date' in result && result.planned_date) {
+    // If setting to today or future, ensure we keep it
+    // Logic can be expanded here if needed
+  }
+
   // Always stamp updated_at
   if (!result.updated_at) {
     result.updated_at = new Date().toISOString();
@@ -113,6 +119,16 @@ export const taskService = {
         await db.recordAction('tasks', 'update', { id, ...update });
       }
     }
+    processOutbox().catch(() => {});
+  },
+
+  /**
+   * Set or unset the planned date (Daily Agenda commitment).
+   */
+  async setPlannedDate(taskId: string, date: string | null): Promise<void> {
+    const update = { planned_date: date, updated_at: new Date().toISOString() };
+    await db.tasks.update(taskId, update);
+    await db.recordAction('tasks', 'update', { id: taskId, ...update });
     processOutbox().catch(() => {});
   },
 

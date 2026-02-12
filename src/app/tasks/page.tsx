@@ -41,14 +41,19 @@ export default function TasksPage() {
   });
 
   // Reorder handler
-  const handleReorder = async (reorderedTasks: Task[]) => {
+  const handleReorder = useCallback(async (reorderedTasks: Task[]) => {
     // Optimistic UI update
     queryClient.setQueryData(['tasks', 'manager'], reorderedTasks.map((t, i) => ({ ...t, sortOrder: i + 1 })));
+  }, [queryClient]);
+
+  const persistReorder = useCallback(async () => {
+    const tasks = queryClient.getQueryData<Task[]>(['tasks', 'manager']);
+    if (!tasks) return;
     
-    // Persist via centralized service
-    const orderedIds = reorderedTasks.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
+    const sorted = [...tasks].sort((a, b) => a.sortOrder - b.sortOrder);
+    const orderedIds = sorted.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
     await taskService.reorder(orderedIds);
-  };
+  }, [queryClient]);
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const selectedTask = tasks.find(t => t.id === selectedTaskId);
@@ -157,14 +162,15 @@ export default function TasksPage() {
     return inTitle || inProject || inDescription;
   });
 
-  const handleDelete = (id: string) => {
-    if (deleteMutation.isPending) return;
-    deleteMutation.mutate(id);
-  };
-  const handleComplete = (task: any) => {
+  const handleComplete = useCallback((task: any) => {
     if (completeMutation.isPending) return;
     completeMutation.mutate(task);
-  };
+  }, [completeMutation]);
+
+  const handleDelete = useCallback((id: string) => {
+    if (deleteMutation.isPending) return;
+    deleteMutation.mutate(id);
+  }, [deleteMutation]);
   const handleUpdateStatus = (id: string, newState: string) => {
     if (updateStatusMutation.isPending) return;
     updateStatusMutation.mutate({ id, newState });
@@ -225,6 +231,7 @@ export default function TasksPage() {
                 <ReorderableItem
                   key={task.id}
                   value={task}
+                  onDragEnd={persistReorder}
                 >
                   <FocusCard 
                     key={task.id}

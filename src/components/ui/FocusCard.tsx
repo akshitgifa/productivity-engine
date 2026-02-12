@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { cn, formatTimeRemaining } from "@/lib/utils";
 import { hexToRgba } from "@/lib/colors";
 import { RotateCcw, Trash2, Check, Maximize2, AlertCircle } from "lucide-react";
-import { motion, useMotionValue, useTransform, AnimatePresence, animate } from "framer-motion";
+import { motion, useMotionValue } from "framer-motion";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { ActionBubbles } from "./ActionBubbles";
 
 interface FocusCardProps {
   title: string;
@@ -19,14 +20,17 @@ interface FocusCardProps {
   completedSubtasksCount?: number;
   dueDate?: Date;
   projectColor?: string;
+  isPlanned?: boolean;
+  onPlannedChange?: (isPlanned: boolean) => void;
+  onInteractionChange?: (active: boolean) => void;
+  // Unified drag props
+  isDragging?: boolean;
+  dragOffset?: { x: number; y: number };
+  dragStartCenter?: { x: number; y: number } | null;
 }
 
-const TIER_COLORS = {
-  1: "text-tier-1 bg-tier-1/5",
-  2: "text-tier-2 bg-tier-2/5",
-  3: "text-tier-3 bg-tier-3/5",
-  4: "text-tier-4 bg-tier-4/5",
-};
+const BUBBLE_RADIUS = 160; // px — past this, bubbles dismiss
+const LONG_PRESS_MS = 350; // ms to activate bubbles
 
 export function FocusCard({ 
   title, 
@@ -41,38 +45,65 @@ export function FocusCard({
   subtasksCount = 0,
   completedSubtasksCount = 0,
   dueDate,
-  projectColor
+  projectColor,
+  isPlanned,
+  onPlannedChange,
+  onInteractionChange,
+  isDragging,
+  dragOffset,
+  dragStartCenter
 }: FocusCardProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
-  const x = useMotionValue(0);
-  const [isDragging, setIsDragging] = useState(false);
-  
-  // Transform values for swipe feedback
-  const background = useTransform(
-    x,
-    [-100, 0, 100],
-    ["rgba(244, 63, 94, 0.2)", "rgba(24, 24, 27, 0)", "rgba(16, 185, 129, 0.2)"]
-  );
-  
-  const opacityLeft = useTransform(x, [-100, -50], [1, 0]);
-  const opacityRight = useTransform(x, [50, 100], [0, 1]);
-  const scaleRight = useTransform(x, [50, 100], [0.8, 1.2]);
-  const scaleLeft = useTransform(x, [-100, -50], [1.2, 0.8]);
 
-  const handleDragEnd = (_: any, info: any) => {
-    setIsDragging(false);
-    if (info.offset.x > 100 && onComplete) {
-      onComplete();
-    } else if (info.offset.x < -100 && onDelete) {
-      onDelete();
-    } else {
-      // Smooth spring snap-back to neutral
-      animate(x, 0, { type: 'spring', stiffness: 500, damping: 30 });
+  // — Mobile bubble state (Now reactive) —
+  const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  const lastIsDragging = useRef(false);
+  const handlersRef = useRef({ onComplete, onDelete, onPlannedChange, isPlanned });
+
+  // Update refs on every render to always have the latest functions
+  useEffect(() => {
+    handlersRef.current = { onComplete, onDelete, onPlannedChange, isPlanned };
+  });
+
+
+  // Reactive bubble logic
+  const bubblesActive = isMobile && isDragging && dragOffset 
+    ? (Math.sqrt(dragOffset.x * dragOffset.x + dragOffset.y * dragOffset.y) < BUBBLE_RADIUS)
+    : false;
+
+  useEffect(() => {
+    if (!isMobile || !isDragging || !dragOffset) {
+      setActiveActionId(prev => prev === null ? null : null);
+      return;
     }
-  };
+
+    const { x: dx, y: dy } = dragOffset;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    setActiveActionId(prev => {
+      let next: string | null = null;
+      if (dist <= BUBBLE_RADIUS) {
+        if (dy < -50 && Math.abs(dx) < 50) next = "complete";
+        else if (dx < -40 && dy > 10) next = "delete";
+        else if (dx > 40 && dy > 10) next = "today";
+      }
+      return prev === next ? prev : next;
+    });
+  }, [isMobile, isDragging, dragOffset]);
+
+  // Trigger actions on drag end
+  useEffect(() => {
+    if (lastIsDragging.current && !isDragging && activeActionId) {
+      const { onComplete, onDelete, onPlannedChange, isPlanned } = handlersRef.current;
+      if (activeActionId === "complete") onComplete?.();
+      else if (activeActionId === "delete") onDelete?.();
+      else if (activeActionId === "today") onPlannedChange?.(!isPlanned);
+    }
+    lastIsDragging.current = !!isDragging;
+  }, [isDragging, activeActionId]);
 
   const cardContent = (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full pointer-events-none">
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-2">
           <div 
@@ -103,10 +134,10 @@ export function FocusCard({
           <span className="text-[10px] font-bold text-zinc-500 bg-void/50 px-2 py-0.5 rounded-full border border-border/30">
             {duration}
           </span>
-          {onUndo && (
+          {!isMobile && onUndo && (
             <button 
               onClick={(e) => { e.stopPropagation(); onUndo(); }}
-              className="p-1 text-zinc-500 hover:text-white transition-colors ml-1"
+              className="p-1 text-zinc-500 hover:text-white transition-colors ml-1 pointer-events-auto"
               title="Undo"
             >
               <RotateCcw size={12} />
@@ -130,9 +161,25 @@ export function FocusCard({
         </div>
       )}
 
+      {/* Persistent Action for Syllabus View (Add/Remove from Today) */}
+      {!isMobile && onPlannedChange && (
+        <button 
+          onClick={(e) => { e.stopPropagation(); onPlannedChange(!isPlanned); }}
+          className={cn(
+            "absolute bottom-5 right-5 w-8 h-8 rounded-lg border flex items-center justify-center transition-all z-20 group-hover:scale-110 pointer-events-auto",
+            isPlanned 
+              ? "bg-primary text-void border-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.2)]" 
+              : "bg-surface/10 border-border/20 text-zinc-600 hover:border-primary/40 hover:text-primary opacity-0 group-hover:opacity-100"
+          )}
+          title={isPlanned ? "In Today's Agenda" : "Add to Today"}
+        >
+          {isPlanned ? <Check size={14} strokeWidth={4} /> : <span className="text-sm font-black">+</span>}
+        </button>
+      )}
+
       {/* PC Hover Actions */}
       {!isMobile && (
-        <div className="absolute inset-0 bg-void/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-2xl flex items-center justify-center gap-4 z-10">
+        <div className="absolute inset-0 bg-void/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-2xl flex items-center justify-center gap-4 z-10 pointer-events-auto">
           {onComplete && (
             <button 
               onClick={(e) => { e.stopPropagation(); onComplete(); }}
@@ -169,41 +216,30 @@ export function FocusCard({
   );
 
   return (
-    <div className="relative overflow-visible group">
-      {/* Mobile Swipe Indicators */}
-      {isMobile && (
-        <>
-          <motion.div 
-            style={{ opacity: opacityRight, scale: scaleRight }}
-            className="absolute left-6 top-1/2 -translate-y-1/2 text-emerald-500 z-0 pointer-events-none"
-          >
-            <Check size={32} strokeWidth={3} />
-          </motion.div>
-          <motion.div 
-            style={{ opacity: opacityLeft, scale: scaleLeft }}
-            className="absolute right-6 top-1/2 -translate-y-1/2 text-rose-500 z-0 pointer-events-none"
-          >
-            <Trash2 size={32} strokeWidth={3} />
-          </motion.div>
-        </>
-      )}
+    <div className={cn(
+      "relative overflow-visible group",
+      bubblesActive ? "z-50" : "z-auto"
+    )}>
+      {/* Portal-based bubbles positioned at card's original center */}
+      <ActionBubbles 
+        isVisible={bubblesActive} 
+        activeActionId={activeActionId}
+        onPlannedChange={isPlanned}
+        center={dragStartCenter || undefined}
+      />
 
       <motion.div
-        drag={isMobile ? "x" : false}
-        dragConstraints={{ left: -120, right: 120 }}
-        dragElastic={0.15}
-        dragMomentum={false}
-        onDragStart={() => setIsDragging(true)}
-        onDragEnd={handleDragEnd}
-        onClick={() => onClick?.()}
+        onClick={() => {
+          if (!bubblesActive) onClick?.();
+        }}
         className={cn(
-          "relative bg-surface border rounded-2xl p-5 card-shadow cursor-pointer z-10 will-change-transform",
-          isDragging ? "transition-none" : "transition-all duration-300",
+          "relative bg-surface border rounded-2xl p-5 card-shadow cursor-pointer will-change-transform z-10",
+          bubblesActive ? "transition-none" : "transition-all duration-300",
           isActive ? "bg-surface/90 border-transparent shadow-[0_0_30px_-10px_rgba(0,0,0,0.5)]" : "border-transparent hover:border-border/50",
-          !isMobile && "group-hover:border-border/30"
+          !isMobile && "group-hover:border-border/30",
+          bubblesActive && "brightness-75 contrast-110"
         )}
         style={{ 
-          x, 
           background: isActive 
             ? `linear-gradient(135deg, ${hexToRgba(projectColor || '#facc15', 0.05)} 0%, rgba(15, 15, 18, 0.95) 100%)` 
             : `linear-gradient(135deg, ${hexToRgba(projectColor || '#facc15', 0.02)} 0%, rgba(15, 15, 18, 0.98) 100%)`,

@@ -22,6 +22,7 @@ export interface Task {
   waitingUntil?: Date | null;
   projectColor?: string;
   sortOrder: number;
+  plannedDate?: string;
 }
 
 export type SessionMode = 'Deep Work' | 'Low Energy' | 'Creative' | 'Admin';
@@ -90,7 +91,8 @@ export function mapTaskData(t: any): Task {
     completedSubtasksCount: t.subtasks?.filter((st: any) => st.is_completed).length || 0,
     waitingUntil: t.waiting_until ? new Date(t.waiting_until) : null,
     projectColor: getProjectColor(t.projects?.name || (t.project_id && t.project_id !== 'c0ffee00-0000-0000-0000-000000000000' ? "Project..." : "Inbox"), t.projects?.color),
-    sortOrder: t.sort_order ?? 0
+    sortOrder: t.sort_order ?? 0,
+    plannedDate: t.planned_date
   };
 }
 

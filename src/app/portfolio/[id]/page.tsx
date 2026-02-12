@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Anchor, Settings2, Trash2, Edit3, Save, X, Brain } from "lucide-react";
 import { db } from "@/lib/db";
@@ -251,7 +251,7 @@ export default function ProjectDetailPage() {
   const handleDeleteTask = (taskId: string) => deleteTaskMutation.mutate(taskId);
 
   // Reorder handler for project tasks
-  const handleReorderProjectTasks = async (reorderedTasks: Task[]) => {
+  const handleReorderProjectTasks = useCallback(async (reorderedTasks: Task[]) => {
     // Optimistic update
     queryClient.setQueryData(['tasks', 'project', id], (old: Task[] | undefined) => {
       if (!old) return old;
@@ -259,11 +259,16 @@ export default function ProjectDetailPage() {
       const nonActive = old.filter(t => t.state !== 'Active');
       return [...activeReordered, ...nonActive];
     });
+  }, [id, queryClient]);
 
-    // Persist via centralized service
-    const orderedIds = reorderedTasks.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
+  const persistReorder = useCallback(async () => {
+    const tasks = queryClient.getQueryData<Task[]>(['tasks', 'project', id]);
+    if (!tasks) return;
+    
+    const activeTasks = tasks.filter(t => t.state === 'Active').sort((a, b) => a.sortOrder - b.sortOrder);
+    const orderedIds = activeTasks.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
     await taskService.reorder(orderedIds);
-  };
+  }, [id, queryClient]);
 
   const selectedTask = (tasks as any[]).find(t => t.id === selectedTaskId);
 
@@ -654,6 +659,7 @@ export default function ProjectDetailPage() {
                             <ReorderableItem
                               key={task.id}
                               value={task}
+                              onDragEnd={persistReorder}
                             >
                               <FocusCard 
                                 title={task.title}
