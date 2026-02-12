@@ -89,7 +89,6 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
           domainUpdates.projectId = updates.project_id;
           domainUpdates.projectName = projects.find(p => p.id === updates.project_id)?.name || "Inbox";
       }
-      if (updates.energy_tag !== undefined) domainUpdates.energyTag = updates.energy_tag;
       if (updates.recurrence_interval_days !== undefined) domainUpdates.recurrenceIntervalDays = updates.recurrence_interval_days;
       if (updates.recurrence_type !== undefined) domainUpdates.recurrenceType = updates.recurrence_type;
       
@@ -414,20 +413,6 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
                     </div>
                 </div>
 
-                <select 
-                    className={cn(
-                        "px-4 py-2 border rounded-xl flex items-center gap-2 h-fit text-[10px] font-bold uppercase tracking-widest outline-none cursor-pointer transition-all appearance-none text-center",
-                        task.energyTag === "Deep" ? "bg-purple-500/10 border-purple-500/20 text-purple-500" :
-                        task.energyTag === "Normal" ? "bg-blue-500/10 border-blue-500/20 text-blue-500" :
-                        "bg-rose-500/10 border-rose-500/20 text-rose-500"
-                    )}
-                    value={task.energyTag}
-                    onChange={(e) => updateTaskMutation.mutate({ energy_tag: e.target.value })}
-                >
-                    <option value="Deep" className="bg-void text-purple-500">Deep</option>
-                    <option value="Normal" className="bg-void text-blue-500">Normal</option>
-                    <option value="Shallow" className="bg-void text-rose-500">Shallow</option>
-                </select>
 
                 <div className="bg-void/50 border border-border/20 rounded-xl flex items-center gap-2 px-4 py-2 hover:border-primary/30 transition-all cursor-pointer group/rec min-w-[100px]">
                     <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest shrink-0">Every</span>

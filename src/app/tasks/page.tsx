@@ -35,7 +35,7 @@ export default function TasksPage() {
         return mapTaskData({ ...t, projects });
       }));
 
-      return sortTasksByUserOrder(mapped, 'Deep Work');
+      return sortTasksByUserOrder(mapped);
     },
     staleTime: 1000 * 60 * 5,
   });
@@ -99,8 +99,7 @@ export default function TasksPage() {
         title: task.title,
         projectId: task.project_id,
         durationMinutes: task.est_duration_minutes,
-        recurrenceIntervalDays: task.recurrence_interval_days,
-        energyTag: task.energy_tag
+        recurrenceIntervalDays: task.recurrence_interval_days
       });
     },
     onMutate: async (task) => {

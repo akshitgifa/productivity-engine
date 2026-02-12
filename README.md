@@ -54,14 +54,14 @@ Setting a deadline resets `sort_order` to 0 (enters deadline pool). Dragging ass
 
 ## Key Features
 
-- **Dashboard**: Curated execution queue sorted by urgency, deadlines, and energy mode
+- **Dashboard**: Curated execution queue sorted by urgency and deadlines
 - **Portfolio**: Per-project task management with health tracking, KPIs, and context cards
 - **AI Assistant**: Multimodal chat (text + voice) with tool access to the full database
 - **Quick Capture**: Voice → transcription → structured task creation in one flow
 - **Notes**: Standalone AI-enhanced knowledge base with markdown editing
 - **Export**: Screenshot-ready progress reports with privacy controls
 - **Smart Recurrence**: Completed recurring tasks auto-spawn with `waiting_until` dates
-- **Subagents**: Background AI workers for parallel research and analysis
+- **Master List**: Unified view of all fragments in the system
 
 ---
 

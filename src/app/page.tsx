@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { FocusCard } from "@/components/ui/FocusCard";
-import { ModeSelector } from "@/components/layout/ModeSelector";
 import { TimeAvailableSelector } from "@/components/layout/TimeAvailableSelector";
 import { useUserStore } from "@/store/userStore";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
@@ -19,13 +18,13 @@ import { db } from "@/lib/db";
 import { toLocalISOString, isTodayLocal } from "@/lib/dateUtils";
 
 export default function Home() {
-  const { mode, timeAvailable } = useUserStore();
+  const { timeAvailable } = useUserStore();
   const { completeTask } = useTaskFulfillment();
   const queryClient = useQueryClient();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [projectFilters, setProjectFilters] = useState<string[]>([]);
   const [undoToast, setUndoToast] = useState<{ id: string; title: string } | null>(null);
-  const [viewMode, setViewMode] = useState<'Today' | 'Syllabus'>('Today');
+  const [viewMode, setViewMode] = useState<'Today' | 'Master'>('Today');
 
   // Use local date string (YYYY-MM-DD) from utility
   const todayStr = toLocalISOString();
@@ -94,8 +93,7 @@ export default function Home() {
         title: task.title,
         projectId: task.projectId,
         durationMinutes: task.durationMinutes,
-        recurrenceIntervalDays: task.recurrenceIntervalDays,
-        energyTag: task.energyTag
+        recurrenceIntervalDays: task.recurrenceIntervalDays
       });
     },
     onMutate: async (task: any) => {
@@ -230,7 +228,7 @@ export default function Home() {
     });
   }
 
-  const sortedTasks = sortTasksByUserOrder(displayTasks, mode);
+  const sortedTasks = sortTasksByUserOrder(displayTasks);
   const isLoading = isTasksLoading;
 
   // Reorder handler: updates sort_order locally in Dexie and syncs via outbox
@@ -296,13 +294,13 @@ export default function Home() {
             Today
           </button>
           <button
-            onClick={() => setViewMode('Syllabus')}
+            onClick={() => setViewMode('Master')}
             className={cn(
               "flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all",
-              viewMode === 'Syllabus' ? "bg-primary text-void shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+              viewMode === 'Master' ? "bg-primary text-void shadow-lg" : "text-zinc-500 hover:text-zinc-300"
             )}
           >
-            Syllabus
+            Master List
           </button>
         </div>
       </header>
@@ -311,7 +309,6 @@ export default function Home() {
         <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-surface/40 backdrop-blur-md border border-border/20 rounded-[2rem] p-4">
             <div className="space-y-4">
-              <ModeSelector />
               <TimeAvailableSelector />
             </div>
           </div>
@@ -446,7 +443,7 @@ export default function Home() {
                   The engine is ready. Pick your focus for a productive day.
                 </p>
                 <button 
-                  onClick={() => setViewMode('Syllabus')}
+                  onClick={() => setViewMode('Master')}
                   className="px-8 py-4 bg-primary text-void rounded-[2rem] font-black text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all"
                 >
                   PLAN YOUR DAY

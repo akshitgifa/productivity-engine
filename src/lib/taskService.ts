@@ -142,8 +142,6 @@ export const taskService = {
     projectId?: string;
     durationMinutes?: number;
     recurrenceIntervalDays?: number;
-    energyTag?: string;
-    sessionMode?: string;
   }): Promise<{ success: boolean }> {
     const now = new Date().toISOString();
 
@@ -157,7 +155,6 @@ export const taskService = {
       task_id: task.id,
       project_id: task.projectId,
       duration_minutes: task.durationMinutes || 30,
-      session_mode: task.sessionMode || "Deep Work",
       completed_at: now,
     };
     await db.activity_logs.add(activityLog);
@@ -190,7 +187,6 @@ export const taskService = {
         description: dbTask.description || undefined,
         project_id: dbTask.project_id,
         est_duration_minutes: dbTask.est_duration_minutes || 30,
-        energy_tag: dbTask.energy_tag || "Shallow",
         state: "Active" as const,
         is_deleted: false,
         recurrence_interval_days: interval,

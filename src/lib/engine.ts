@@ -11,7 +11,6 @@ export interface Task {
   lastTouchedAt: Date;
   decayThresholdDays: number;
   dueDate?: Date;
-  energyTag: 'Deep' | 'Normal' | 'Shallow';
   durationMinutes: number;
   recurrenceIntervalDays?: number;
   recurrenceType: 'completion' | 'schedule';
@@ -25,8 +24,6 @@ export interface Task {
   plannedDate?: string;
 }
 
-export type SessionMode = 'Deep' | 'Shallow';
-
 const TIER_WEIGHTS: Record<ProjectTier, number> = {
   1: 2.0,
   2: 1.5,
@@ -34,12 +31,7 @@ const TIER_WEIGHTS: Record<ProjectTier, number> = {
   4: 0.5,
 };
 
-const MODE_TAG_MAP: Record<SessionMode, Task['energyTag'][]> = {
-  'Deep': ['Deep', 'Normal'],
-  'Shallow': ['Shallow', 'Normal'],
-};
-
-export function calculateUrgencyScore(task: Task, currentMode: SessionMode): number {
+export function calculateUrgencyScore(task: Task): number {
   const now = new Date();
   
   // 1. Mission Critical Override (< 24h)
@@ -57,14 +49,8 @@ export function calculateUrgencyScore(task: Task, currentMode: SessionMode): num
   // 3. Tier Multiplier
   const tierWeight = TIER_WEIGHTS[task.projectTier || 3];
   
-  // 4. Contextual Alignment
-  let contextMultiplier = 0.5; // Neutral-ish penalty for mismatch
-  if (MODE_TAG_MAP[currentMode].includes(task.energyTag)) {
-    contextMultiplier = 2.0; // Significant boost for focused sessions
-  }
-
-  // Formula: Score = (Tier Weight) × (Entropy Ratio^1.5 for non-linear decay) × (Context Multiplier)
-  const score = tierWeight * Math.pow(entropyRatio, 1.5) * contextMultiplier;
+  // Formula: Score = (Tier Weight) × (Entropy Ratio^1.5 for non-linear decay)
+  const score = tierWeight * Math.pow(entropyRatio, 1.5);
   
   return parseFloat(score.toFixed(4));
 }
@@ -79,7 +65,6 @@ export function mapTaskData(t: any): Task {
     lastTouchedAt: new Date(t.last_touched_at || t.created_at || new Date()),
     decayThresholdDays: t.projects?.decay_threshold_days || 15,
     dueDate: t.due_date ? new Date(t.due_date) : undefined,
-    energyTag: t.energy_tag || "Shallow",
     durationMinutes: t.est_duration_minutes || 30,
     recurrenceIntervalDays: t.recurrence_interval_days,
     recurrenceType: t.recurrence_type || 'completion',
@@ -94,11 +79,10 @@ export function mapTaskData(t: any): Task {
   };
 }
 
-
-export function sortTasksByUrgency(tasks: Task[], currentMode: SessionMode): Task[] {
+export function sortTasksByUrgency(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
-    const scoreA = calculateUrgencyScore(a, currentMode);
-    const scoreB = calculateUrgencyScore(b, currentMode);
+    const scoreA = calculateUrgencyScore(a);
+    const scoreB = calculateUrgencyScore(b);
     return scoreB - scoreA;
   });
 }
@@ -109,12 +93,8 @@ export function sortTasksByUrgency(tasks: Task[], currentMode: SessionMode): Tas
  * 2. Among deadlined: manual sort_order (if explicitly set) > deadline order (soonest first)
  * 3. Tasks WITHOUT deadlines → sorted by manual sort_order (ascending)
  * 4. Tiebreaker → urgency score (higher first)
- *
- * Key insight: sort_order 0 = "unranked" (default). When a user sets a deadline,
- * sort_order resets to 0 so it enters deadline-sorted pool. When the user drags
- * to reorder, sort_order gets a real value (>0) that overrides deadline ordering.
  */
-export function sortTasksByUserOrder(tasks: Task[], currentMode: SessionMode): Task[] {
+export function sortTasksByUserOrder(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const aHasDeadline = !!a.dueDate;
     const bHasDeadline = !!b.dueDate;
@@ -146,7 +126,7 @@ export function sortTasksByUserOrder(tasks: Task[], currentMode: SessionMode): T
     }
 
     // Tiebreaker: urgency score (descending — higher urgency first)
-    return calculateUrgencyScore(b, currentMode) - calculateUrgencyScore(a, currentMode);
+    return calculateUrgencyScore(b) - calculateUrgencyScore(a);
   });
 }
 

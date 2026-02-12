@@ -16,7 +16,7 @@ The AI Assistant is an active intelligence partner with full read/write access t
 | `complete_task`    | Mark done, log activity, rejuvenate project health                        |
 | `list_tasks`       | Search/filter tasks by project, state, or query                           |
 | `get_task_details` | Full task with notes and subtasks                                         |
-| `get_syllabus`     | Urgency-sorted execution queue filtered by mode and time                  |
+| `get_master_list`  | Fetch urgency-ranked backlog.                                             |
 
 ### Project Management
 | Tool                  | Description                                    |

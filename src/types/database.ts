@@ -18,7 +18,6 @@ export interface Task {
   due_date?: string;
   waiting_until?: string;
   est_duration_minutes: number;
-  energy_tag: 'Grind' | 'Creative' | 'Shallow';
   blocked_by_id?: string;
   recurrence_interval_days?: number;
   last_touched_at: string;

@@ -3,7 +3,7 @@ import { embed } from 'ai';
 import { SupabaseClient } from '@supabase/supabase-js';
 import { applyTaskUpdateRules } from '@/lib/taskService';
 import { searchWeb } from '@/lib/webSearch';
-import { calculateUrgencyScore, mapTaskData, SessionMode } from '@/lib/engine';
+import { calculateUrgencyScore, mapTaskData } from '@/lib/engine';
 import { createAdminClient } from '@/lib/supabaseAdmin';
 
 export interface SubagentTask {
@@ -113,7 +113,6 @@ export function getTools(supabase: SupabaseClient, google: any) {
         state: z.enum(['Active', 'Waiting', 'Blocked', 'Done']).default('Active'),
         due_date: z.string().optional().describe('ISO timestamp or YYYY-MM-DD'),
         est_duration_minutes: z.number().default(30),
-        energy_tag: z.enum(['Grind', 'Creative', 'Shallow']).default('Shallow'),
         recurrence_interval_days: z.number().optional(),
         recurrence_type: z.enum(['completion', 'schedule']).default('completion'),
       }),
@@ -133,7 +132,6 @@ export function getTools(supabase: SupabaseClient, google: any) {
             state: taskData.state,
             due_date: sanitizedDueDate,
             est_duration_minutes: taskData.est_duration_minutes,
-            energy_tag: taskData.energy_tag,
             recurrence_interval_days: taskData.recurrence_interval_days,
             recurrence_type: taskData.recurrence_type,
           });
@@ -165,7 +163,6 @@ export function getTools(supabase: SupabaseClient, google: any) {
         state: z.enum(['Active', 'Waiting', 'Blocked', 'Done']).optional(),
         description: z.string().optional(),
         due_date: z.string().optional(),
-        energy_tag: z.enum(['Grind', 'Creative', 'Shallow']).optional(),
       }),
       execute: async ({ id, ...updates }: any) => {
         console.log(`[AI TOOLS] >> EXECUTE update_task:`, { id, updates });
@@ -335,16 +332,15 @@ export function getTools(supabase: SupabaseClient, google: any) {
         return data;
       },
     },
-    get_syllabus: {
+    get_master_list: {
       description: 'Fetch the curated list of tasks sorted by urgency (Entropy). Use this to tell the user what to do next.',
       inputSchema: z.object({
         timeAvailableMinutes: z.number().optional().describe('Filter by max estimated duration'),
-        mode: z.enum(['Deep Work', 'Low Energy', 'Creative', 'Admin']).default('Deep Work').describe('Current energy/work mode'),
         limit: z.number().default(10),
       }),
-      execute: async ({ timeAvailableMinutes, mode, limit }: any) => {
+      execute: async ({ timeAvailableMinutes, limit }: any) => {
         try {
-          console.log(`[AI TOOLS] >> EXECUTE get_syllabus:`, { timeAvailableMinutes, mode });
+          console.log(`[AI TOOLS] >> EXECUTE get_master_list:`, { timeAvailableMinutes });
           const nowIso = new Date().toISOString();
           const { data, error } = await supabase
             .from('tasks')
@@ -355,12 +351,11 @@ export function getTools(supabase: SupabaseClient, google: any) {
           if (error) throw error;
           
           // Map and Score
-          const sessionMode = mode as SessionMode;
           let scoredTasks = (data || []).map(t => {
             const taskObj = mapTaskData(t);
             return {
               ...taskObj,
-              urgencyScore: calculateUrgencyScore(taskObj, sessionMode)
+              urgencyScore: calculateUrgencyScore(taskObj)
             };
           });
 
@@ -375,7 +370,7 @@ export function getTools(supabase: SupabaseClient, google: any) {
           return scoredTasks.slice(0, limit);
         } catch (e: unknown) {
           const error = e as Error;
-          console.error(`[AI TOOLS] get_syllabus error:`, error);
+          console.error(`[AI TOOLS] get_master_list error:`, error);
           return { error: error.message };
         }
       },
@@ -455,9 +450,8 @@ export function getTools(supabase: SupabaseClient, google: any) {
       inputSchema: z.object({
         taskId: z.string().uuid(),
         durationMinutes: z.number().optional().describe('Actual time spent (defaults to estimated if not provided)'),
-        sessionMode: z.enum(['Deep Work', 'Low Energy', 'Creative', 'Admin']).optional(),
       }),
-      execute: async ({ taskId, durationMinutes, sessionMode }: any) => {
+      execute: async ({ taskId, durationMinutes }: any) => {
         try {
           console.log(`[AI TOOLS] >> EXECUTE complete_task:`, { taskId });
           
@@ -486,7 +480,6 @@ export function getTools(supabase: SupabaseClient, google: any) {
               task_id: taskId,
               project_id: projectId,
               duration_minutes: finalDuration,
-              session_mode: sessionMode || 'Deep Work',
               completed_at: new Date().toISOString()
             })
           ]);
@@ -513,7 +506,6 @@ export function getTools(supabase: SupabaseClient, google: any) {
               description: task.description,
               project_id: task.project_id,
               est_duration_minutes: task.est_duration_minutes || 30,
-              energy_tag: task.energy_tag || "Shallow",
               state: "Active",
               recurrence_interval_days: interval,
               recurrence_type: type,

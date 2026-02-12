@@ -34,7 +34,6 @@ export interface Task {
   due_date?: string;
   waiting_until?: string;
   est_duration_minutes: number;
-  energy_tag: 'Deep' | 'Normal' | 'Shallow';
   blocked_by_id?: string;
   recurrence_interval_days?: number;
   recurrence_type?: 'completion' | 'schedule';
@@ -53,7 +52,6 @@ export interface ActivityLog {
   project_id?: string;
   completed_at: string;
   duration_minutes: number;
-  session_mode: string;
   updated_at?: string;
 }
 

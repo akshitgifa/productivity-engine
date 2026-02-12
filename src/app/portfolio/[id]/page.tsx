@@ -88,7 +88,7 @@ export default function ProjectDetailPage() {
     queryFn: async () => {
       const activeTasks = await db.getActiveTasks({ projectId: id as string });
       const mapped = activeTasks.map((t) => mapTaskData(t as any));
-      return sortTasksByUserOrder(mapped, 'Deep Work');
+      return sortTasksByUserOrder(mapped);
     },
     enabled: !!id
   });
@@ -176,8 +176,7 @@ export default function ProjectDetailPage() {
         title: task.title,
         projectId: id as string,
         durationMinutes: task.durationMinutes,
-        recurrenceIntervalDays: task.recurrenceIntervalDays,
-        energyTag: task.energyTag
+        recurrenceIntervalDays: task.recurrenceIntervalDays
       });
     },
     onMutate: async (task: Task) => {

@@ -22,7 +22,6 @@ import {
 type CompletedTask = {
   id: string;
   title: string;
-  energy_tag: "Grind" | "Creative" | "Shallow";
   project_id: string | null;
   updated_at: string;
   est_duration_minutes: number | null;
@@ -54,10 +53,8 @@ type ExportSettings = {
   showProjectNames: boolean;
   blurTaskNames: boolean;
   blurProjectNames: boolean;
-  showEnergyTags: boolean;
   showFocusTime: boolean;
   selectedProjects: string[];
-  selectedEnergyTags: string[];
   attribution: "powered" | "shared" | "hidden";
 };
 
@@ -103,10 +100,8 @@ export default function ExportPage() {
   const [showProjectNames, setShowProjectNames] = useState(true);
   const [blurTaskNames, setBlurTaskNames] = useState(false);
   const [blurProjectNames, setBlurProjectNames] = useState(false);
-  const [showEnergyTags, setShowEnergyTags] = useState(false);
   const [showFocusTime, setShowFocusTime] = useState(true);
   const [selectedProjects, setSelectedProjects] = useState<string[]>([]);
-  const [selectedEnergyTags, setSelectedEnergyTags] = useState<string[]>([]);
   const [attribution, setAttribution] = useState<"powered" | "shared" | "hidden">("powered");
 
   useEffect(() => {
@@ -126,10 +121,8 @@ export default function ExportPage() {
         if (parsed.showProjectNames !== undefined) setShowProjectNames(parsed.showProjectNames);
         if (parsed.blurTaskNames !== undefined) setBlurTaskNames(parsed.blurTaskNames);
         if (parsed.blurProjectNames !== undefined) setBlurProjectNames(parsed.blurProjectNames);
-        if (parsed.showEnergyTags !== undefined) setShowEnergyTags(parsed.showEnergyTags);
         if (parsed.showFocusTime !== undefined) setShowFocusTime(parsed.showFocusTime);
         if (parsed.selectedProjects) setSelectedProjects(parsed.selectedProjects);
-        if (parsed.selectedEnergyTags) setSelectedEnergyTags(parsed.selectedEnergyTags);
         if (parsed.attribution) setAttribution(parsed.attribution);
       } catch {
         // Ignore corrupt settings
@@ -155,10 +148,8 @@ export default function ExportPage() {
       showProjectNames,
       blurTaskNames,
       blurProjectNames,
-      showEnergyTags,
       showFocusTime,
       selectedProjects,
-      selectedEnergyTags,
       attribution,
     };
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
@@ -173,10 +164,8 @@ export default function ExportPage() {
     showProjectNames,
     blurTaskNames,
     blurProjectNames,
-    showEnergyTags,
     showFocusTime,
     selectedProjects,
-    selectedEnergyTags,
     attribution,
   ]);
 
@@ -265,12 +254,9 @@ export default function ExportPage() {
       if (selectedProjects.length > 0 && !task.project_id) {
         return false;
       }
-      if (selectedEnergyTags.length > 0 && !selectedEnergyTags.includes(task.energy_tag)) {
-        return false;
-      }
       return true;
     });
-  }, [completedTasks, selectedProjects, selectedEnergyTags]);
+  }, [completedTasks, selectedProjects]);
 
   const totalMinutes = filteredTasks.reduce((sum, task) => sum + (task.est_duration_minutes || 0), 0);
   const previewTasks = showTaskList ? filteredTasks.slice(0, 8) : [];
@@ -485,42 +471,6 @@ export default function ExportPage() {
                     )}
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">Energy Tags</label>
-                    <div className="flex flex-wrap gap-2">
-                      {["Grind", "Creative", "Shallow"].map((tag) => {
-                        const active = selectedEnergyTags.includes(tag);
-                        return (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={() =>
-                              setSelectedEnergyTags((prev) =>
-                                active ? prev.filter((id) => id !== tag) : [...prev, tag]
-                              )
-                            }
-                            className={cn(
-                              "rounded-full px-3 py-1 text-[9px] font-bold uppercase tracking-[0.2em] transition-all",
-                              active
-                                ? "bg-primary text-void"
-                                : "bg-void border border-border/40 text-zinc-400 hover:text-white"
-                            )}
-                          >
-                            {tag}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {selectedEnergyTags.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedEnergyTags([])}
-                        className="text-[10px] font-semibold text-primary hover:opacity-80"
-                      >
-                        Clear energy tags
-                      </button>
-                    )}
-                  </div>
                 </div>
               </details>
 
@@ -546,15 +496,6 @@ export default function ExportPage() {
                       className="accent-primary"
                     />
                     Show project names
-                  </label>
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={showEnergyTags}
-                      onChange={(event) => setShowEnergyTags(event.target.checked)}
-                      className="accent-primary"
-                    />
-                    Show energy tags
                   </label>
                   <label className="flex items-center gap-3">
                     <input
@@ -666,11 +607,6 @@ export default function ExportPage() {
                           </p>
                         )}
                       </div>
-                      {showEnergyTags && (
-                        <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-400">
-                          {task.energy_tag}
-                        </div>
-                      )}
                     </div>
                   ))}
                   {previewTasks.length === 0 && (

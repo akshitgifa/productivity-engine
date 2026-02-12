@@ -28,7 +28,7 @@ The AI Assistant's behavior is defined by its system prompt. The prompt must be 
 - `list_tasks`: Search and filter tasks.
 - `create_task`: Add work to the dashboard.
 - `update_task` / `delete_task` / `complete_task`.
-- `get_syllabus`: Fetch the urgency-sorted dashboard view.
+- `get_master_list`: Fetch the urgency-sorted dashboard view.
 
 ### Note & Knowledge Tools (Phase 1+)
 - `create_note`: Create standalone or task-linked notes.
