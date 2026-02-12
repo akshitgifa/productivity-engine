@@ -7,9 +7,12 @@
 ### Core Philosophy
 - **High-Performance Minimalism:** Speed, clarity, and visual elegance. The interface should feel like a premium tool, not just a web app.
 - **Probabilistic Scheduling:** Work is modeled as entropy (decay). If you ignore a project, its tasks rise in urgency automatically.
+- **Intentional Commitment:** The "Today" view acts as a daily fortress, where only tasks you explicitly commit to or that have absolute deadlines appear.
 - **Cognitive Partnership:** The AI Assistant is moving from a simple tool to a "Second Brain" that remembers, anticipates, and acts in the background.
 
 ### Current Features (v1.0)
+- **Today View & Syllabus:** Dual modes for execution. "Today" is a curated agenda; "Syllabus" is the full, urgency-ranked backlog.
+- **Action Bubbles:** Creative mobile interactions (hold-and-drag) for swift task management.
 - **Dashboard:** A dynamic, urgency-sorted task list using the entropy decay algorithm.
 - **Projects:** High-level tracking of active projects with tier-based weights and health monitoring.
 - **AI Assistant (Chat):** A "God Mode" Assistant capable of managing tasks and projects via tool calls.

@@ -58,6 +58,20 @@ Execution is divided into 5 testable phases. **USER MUST TEST AFTER EACH PHASE.*
 - [x] **2.6.4 Schema:** Repair all synced tables with `updated_at` columns and triggers.
 
 **TESTED ✅:** Deletions are revocable for 5s. Sync is dramatically faster on large datasets.
+ 
+---
+ 
+## Phase 2.7: Today View & Intentionality ✅
+**Goal:** Focus from "everything" to "today's commitments".
+
+### Tasks
+- [x] **2.7.1 Schema:** Add `planned_date` to tasks table (and cloud migration).
+- [x] **2.7.2 UI:** Replace "Orbit" with "Today" view. Implement Today/Syllabus toggle.
+- [x] **2.7.3 Mobile:** Build "Action Bubbles" (Hold-and-drag menu) for Complete/Delete/Commit.
+- [x] **2.7.4 Engine:** Standardize local date string comparison to fix midnight-to-5:30AM timezone gap.
+- [x] **2.7.5 Proactive:** "Plan Your Day" empty state with "Top Picks" from the Syllabus.
+
+**TESTED ✅:** User verified the "Commit" flow and the creative mobile interaction bubble feedback.
 
 ---
 

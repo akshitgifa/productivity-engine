@@ -16,6 +16,7 @@ import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { db } from "@/lib/db";
+import { toLocalISOString, isTodayLocal } from "@/lib/dateUtils";
 
 export default function Home() {
   const { mode, timeAvailable } = useUserStore();
@@ -26,8 +27,8 @@ export default function Home() {
   const [undoToast, setUndoToast] = useState<{ id: string; title: string } | null>(null);
   const [viewMode, setViewMode] = useState<'Today' | 'Syllabus'>('Today');
 
-  // Use local date string (YYYY-MM-DD) to avoid UTC mismatch
-  const todayStr = new Date().toLocaleDateString('en-CA');
+  // Use local date string (YYYY-MM-DD) from utility
+  const todayStr = toLocalISOString();
 
   // 1. Fetch Active Tasks Query from Local DB
   const { data: allActive = [], isLoading: isTasksLoading } = useQuery({
@@ -174,8 +175,8 @@ export default function Home() {
   }, [deleteMutation]);
 
   const toggleCommitment = useCallback(async (taskId: string, currentPlanned: boolean) => {
-    // Standardize: Store as local YYYY-MM-DD instead of UTC ISO to avoid timezone shifts
-    const nextPlanned = currentPlanned ? null : new Date().toLocaleDateString('en-CA');
+    // Standardize: Store as local YYYY-MM-DD from utility
+    const nextPlanned = currentPlanned ? null : toLocalISOString();
     await taskService.setPlannedDate(taskId, nextPlanned);
     queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
   }, [queryClient]);
@@ -212,7 +213,7 @@ export default function Home() {
       if (t.plannedDate) {
         if (t.plannedDate.includes('T')) {
           // Legacy ISO format - convert to local date string for comparison
-          taskPlannedDay = new Date(t.plannedDate).toLocaleDateString('en-CA');
+          taskPlannedDay = toLocalISOString(new Date(t.plannedDate));
         } else {
           // New standardized local format (YYYY-MM-DD)
           taskPlannedDay = t.plannedDate;
@@ -222,7 +223,7 @@ export default function Home() {
       const isPlannedToday = taskPlannedDay === todayStr;
       
       // Compare local date strings for due dates
-      const taskDueDateStr = t.dueDate ? t.dueDate.toLocaleDateString('en-CA') : null;
+      const taskDueDateStr = t.dueDate ? toLocalISOString(t.dueDate) : null;
       const isDueTodayOrOverdue = taskDueDateStr && taskDueDateStr <= todayStr;
       
       return isPlannedToday || isDueTodayOrOverdue;

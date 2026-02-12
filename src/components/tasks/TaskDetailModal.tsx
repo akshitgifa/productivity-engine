@@ -20,7 +20,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/db";
-import { processOutbox } from "@/lib/sync";
+import { mutationService } from "@/lib/mutationService";
 import { taskService } from "@/lib/taskService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TaskNote, Subtask } from "@/types/database";
@@ -112,16 +112,10 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
 
   const addSubtaskMutation = useMutation({
     mutationFn: async (title: string) => {
-      const newSubtask = {
-        id: crypto.randomUUID(),
+      await mutationService.subtasks.create({
         task_id: task.id,
         title,
-        is_completed: false,
-        created_at: new Date().toISOString()
-      };
-      await db.subtasks.add(newSubtask);
-      await db.recordAction('subtasks', 'insert', newSubtask);
-      processOutbox().catch(() => {});
+      });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "subtasks"] }),
     onSuccess: () => setNewSubtask(""),
@@ -132,20 +126,14 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
       const update: Record<string, any> = {};
       if (title !== undefined) update.title = title;
       if (is_completed !== undefined) update.is_completed = is_completed;
-      await db.subtasks.update(id, update);
-      await db.recordAction('subtasks', 'update', { id, ...update });
-      processOutbox().catch(() => {});
+      await mutationService.update('subtasks', id, update);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "subtasks"] }),
   });
 
   const deleteSubtaskMutation = useMutation({
     mutationFn: async (id: string) => {
-      const now = new Date().toISOString();
-      await db.subtasks.update(id, { is_deleted: true, updated_at: now } as any);
-      await db.recordAction('subtasks', 'update', { id, is_deleted: true, updated_at: now });
-      processOutbox().catch(() => {});
-      processOutbox().catch(() => {});
+      await mutationService.delete('subtasks', id);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "subtasks"] }),
   });
@@ -153,28 +141,24 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
   const { data: linkedNotes = [], isLoading: isLoadingNotes } = useQuery({
     queryKey: ["tasks", task.id, "notes"],
     queryFn: async () => {
-      const notes = await db.notes.where('task_id').equals(task.id).toArray();
-      return notes.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+      const notes = await db.getActiveNotes(); // Use helper or simple query
+      return notes.filter(n => n.task_id === task.id).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
     },
     enabled: isOpen && activeTab === "strategize",
   });
 
   const createNoteMutation = useMutation({
     mutationFn: async () => {
+      const id = crypto.randomUUID();
       const newNote = {
-        id: crypto.randomUUID(),
+        id,
         title: `Strategy for ${task.title}`,
         content: "",
         task_id: task.id,
         project_id: task.projectId || undefined,
-        sort_order: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
       };
-      await db.notes.add(newNote);
-      await db.recordAction('notes', 'insert', newNote);
-      processOutbox().catch(() => {});
-      return newNote;
+      await mutationService.notes.create(newNote);
+      return { ...newNote, updated_at: new Date().toISOString() };
     },
     onSuccess: (newNote) => {
       queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "notes"] });
