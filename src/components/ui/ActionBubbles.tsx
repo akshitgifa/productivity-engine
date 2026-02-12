@@ -17,12 +17,14 @@ interface ActionBubbleProps {
 function ActionBubble({ icon: Icon, label, color, isHovered, position }: ActionBubbleProps) {
   return (
     <motion.div
-      initial={{ scale: 0, opacity: 0 }}
+      initial={{ scale: 0, opacity: 0, x: position.x, y: position.y, translateX: "-50%", translateY: "-50%" }}
       animate={{ 
         scale: isHovered ? 1.4 : 1, 
         opacity: 1,
         x: position.x,
-        y: position.y
+        y: position.y,
+        translateX: "-50%",
+        translateY: "-50%"
       }}
       exit={{ scale: 0, opacity: 0 }}
       className={cn(
@@ -53,6 +55,12 @@ function ActionBubble({ icon: Icon, label, color, isHovered, position }: ActionB
   );
 }
 
+export const BUBBLE_POSITIONS = [
+  { id: "complete", icon: Check, label: "Complete", color: "#10b981", pos: { x: 0, y: -90 } },
+  { id: "delete", icon: Trash2, label: "Delete", color: "#f43f5e", pos: { x: -80, y: 40 } },
+  { id: "today", icon: Calendar, label: "Today", color: "#facc15", pos: { x: 80, y: 40 } },
+] as const;
+
 interface ActionBubblesProps {
   isVisible: boolean;
   activeActionId: string | null;
@@ -67,11 +75,10 @@ export function ActionBubbles({ isVisible, activeActionId, onPlannedChange, cent
     setMounted(true);
   }, []);
 
-  const actions = useMemo(() => [
-    { id: "complete", icon: Check, label: "Complete", color: "#10b981", pos: { x: 0, y: -90 } },
-    { id: "delete", icon: Trash2, label: "Delete", color: "#f43f5e", pos: { x: -80, y: 40 } },
-    { id: "today", icon: Calendar, label: onPlannedChange ? "Remove Today" : "Move to Today", color: "#facc15", pos: { x: 80, y: 40 } },
-  ], [onPlannedChange]);
+  const actions = useMemo(() => BUBBLE_POSITIONS.map(a => ({
+    ...a,
+    label: a.id === "today" ? (onPlannedChange ? "Remove Today" : "Move to Today") : a.label
+  })), [onPlannedChange]);
 
   if (!mounted || !center) return null;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { FocusCard } from "@/components/ui/FocusCard";
 import { TimeAvailableSelector } from "@/components/layout/TimeAvailableSelector";
 import { useUserStore } from "@/store/userStore";
@@ -25,6 +25,7 @@ export default function Home() {
   const [projectFilters, setProjectFilters] = useState<string[]>([]);
   const [undoToast, setUndoToast] = useState<{ id: string; title: string } | null>(null);
   const [viewMode, setViewMode] = useState<'Today' | 'Master'>('Today');
+  const [displayedTasks, setDisplayedTasks] = useState<Task[]>([]);
 
   // Use local date string (YYYY-MM-DD) from utility
   const todayStr = toLocalISOString();
@@ -172,11 +173,31 @@ export default function Home() {
     deleteMutation.mutate(taskId);
   }, [deleteMutation]);
 
-  const toggleCommitment = useCallback(async (taskId: string, currentPlanned: boolean) => {
-    // Standardize: Store as local YYYY-MM-DD from utility
-    const nextPlanned = currentPlanned ? null : toLocalISOString();
-    await taskService.setPlannedDate(taskId, nextPlanned);
-    queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
+  const toggleCommitment = useCallback(async (taskId: string, currentPlanned: boolean, targetPlanned?: boolean) => {
+    // If targetPlanned is provided, use it; otherwise toggle
+    const shouldPlan = targetPlanned !== undefined ? targetPlanned : !currentPlanned;
+    const nextPlanned = shouldPlan ? toLocalISOString() : null;
+    
+    // Optimistic UI update
+    const previousTasks = queryClient.getQueryData<Task[]>(['tasks', 'today']);
+    if (previousTasks) {
+      const updated = previousTasks.map(t => 
+        t.id === taskId ? { ...t, plannedDate: nextPlanned || undefined } : t
+      );
+      queryClient.setQueryData(['tasks', 'today'], updated);
+    }
+
+    try {
+      await taskService.setPlannedDate(taskId, nextPlanned);
+    } catch (err) {
+      console.error("Failed to toggle commitment:", err);
+      // Rollback on error
+      if (previousTasks) {
+        queryClient.setQueryData(['tasks', 'today'], previousTasks);
+      }
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
+    }
   }, [queryClient]);
 
   // Handle auto-refresh from sync events
@@ -189,23 +210,24 @@ export default function Home() {
   }, [queryClient]);
 
   // 1. Basic Filters (Project + Time)
-  let filtered = allActive;
-  if (projectFilters.length > 0) {
-    filtered = allActive.filter((t) => {
-      const isInbox = t.projectId === 'c0ffee00-0000-0000-0000-000000000000';
-      if (isInbox) return projectFilters.includes('INBOX');
-      return projectFilters.includes(t.projectId);
-    });
-  }
+  const memoizedDisplayTasks = useMemo(() => {
+    let filtered = allActive;
+    if (projectFilters.length > 0) {
+      filtered = allActive.filter((t) => {
+        const isInbox = t.projectId === 'c0ffee00-0000-0000-0000-000000000000';
+        if (isInbox) return projectFilters.includes('INBOX');
+        return projectFilters.includes(t.projectId);
+      });
+    }
 
-  if (timeAvailable) {
-    filtered = filtered.filter(t => t.durationMinutes <= timeAvailable);
-  }
+    if (timeAvailable) {
+      filtered = filtered.filter(t => t.durationMinutes <= timeAvailable);
+    }
 
-  // 2. View Mode Filters
-  let displayTasks = filtered;
-  if (viewMode === 'Today') {
-    displayTasks = filtered.filter((t: Task) => {
+    if (viewMode !== 'Today') return filtered;
+
+    // View Mode Filters
+    return filtered.filter((t: Task) => {
       // Normalize plannedDate: handle both old ISO strings and new local strings
       let taskPlannedDay = null;
       if (t.plannedDate) {
@@ -226,31 +248,27 @@ export default function Home() {
       
       return isPlannedToday || isDueTodayOrOverdue;
     });
-  }
+  }, [allActive, projectFilters, timeAvailable, viewMode, todayStr]);
 
-  const sortedTasks = sortTasksByUserOrder(displayTasks);
   const isLoading = isTasksLoading;
 
-  // Reorder handler: updates sort_order locally in Dexie and syncs via outbox
-  const handleReorder = useCallback(async (reorderedTasks: Task[]) => {
-    // Optimistic UI update via query cache
-    const updatedAll = allActive.map(t => {
-      const idx = reorderedTasks.findIndex(rt => rt.id === t.id);
-      if (idx !== -1) return { ...t, sortOrder: idx + 1 };
-      return t;
-    });
-    queryClient.setQueryData(['tasks', 'today'], updatedAll);
-  }, [allActive, queryClient]);
+  useEffect(() => {
+    setDisplayedTasks(sortTasksByUserOrder(memoizedDisplayTasks));
+  }, [memoizedDisplayTasks]);
+
+  // Reorder handler: updates local state for smooth drag
+  const handleReorder = useCallback((reorderedTasks: Task[]) => {
+    setDisplayedTasks(reorderedTasks);
+  }, []);
 
   const persistReorder = useCallback(async () => {
-    const tasks = queryClient.getQueryData<Task[]>(['tasks', 'today']);
-    if (!tasks) return;
-    
-    // Sort tasks by their current sort order to ensure they are in the right order for the service
-    const sorted = [...tasks].sort((a, b) => a.sortOrder - b.sortOrder);
-    const orderedIds = sorted.map(t => ({ id: t.id, currentSortOrder: t.sortOrder }));
+    if (displayedTasks.length === 0) return;
+    const orderedIds = displayedTasks.map((t, idx) => ({ 
+      id: t.id, 
+      currentSortOrder: t.sortOrder 
+    }));
     await taskService.reorder(orderedIds);
-  }, [queryClient]);
+  }, [displayedTasks]);
 
   const activeFilterCount = projectFilters.length;
 
@@ -399,15 +417,15 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          ) : sortedTasks.length > 0 ? (
+          ) : displayedTasks.length > 0 ? (
             <Reorder.Group
               axis="y"
-              values={sortedTasks}
-              onReorder={(reordered) => handleReorder(reordered)}
+              values={displayedTasks}
+              onReorder={handleReorder}
               className="flex flex-col gap-4"
               as="div"
             >
-              {sortedTasks.map((task) => (
+              {displayedTasks.map((task) => (
                   <ReorderableItem
                     key={task.id}
                     value={task}
@@ -427,7 +445,7 @@ export default function Home() {
                     completedSubtasksCount={task.completedSubtasksCount}
                     projectColor={task.projectColor}
                     isPlanned={!!task.plannedDate?.startsWith(todayStr)}
-                    onPlannedChange={() => toggleCommitment(task.id, !!task.plannedDate?.startsWith(todayStr))}
+                    onPlannedChange={(next) => toggleCommitment(task.id, !!task.plannedDate?.startsWith(todayStr), next)}
                   />
                 </ReorderableItem>
               ))}
@@ -454,7 +472,7 @@ export default function Home() {
               <div className="space-y-4">
                 <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.3em]">Top Picks from Engine</h3>
                 <div className="grid grid-cols-1 gap-3">
-                  {filtered.slice(0, 3).map(task => (
+                  {memoizedDisplayTasks.slice(0, 3).map(task => (
                     <div key={task.id} className="bg-surface/40 border border-border/10 rounded-2xl p-4 flex items-center justify-between group hover:border-primary/20 transition-all">
                       <div className="flex items-center gap-4">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: task.projectColor || '#10b981' }} />
@@ -464,7 +482,7 @@ export default function Home() {
                         </div>
                       </div>
                       <button 
-                        onClick={() => toggleCommitment(task.id, false)}
+                        onClick={() => toggleCommitment(task.id, false, true)}
                         className="w-10 h-10 rounded-xl border border-border/20 text-zinc-500 flex items-center justify-center hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
                       >
                         <span className="text-lg font-black">+</span>

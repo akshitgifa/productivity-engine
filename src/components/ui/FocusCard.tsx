@@ -4,7 +4,7 @@ import { hexToRgba } from "@/lib/colors";
 import { RotateCcw, Trash2, Check, Maximize2, AlertCircle } from "lucide-react";
 import { motion, useMotionValue } from "framer-motion";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { ActionBubbles } from "./ActionBubbles";
+import { ActionBubbles, BUBBLE_POSITIONS } from "./ActionBubbles";
 
 interface FocusCardProps {
   title: string;
@@ -29,7 +29,7 @@ interface FocusCardProps {
   dragStartCenter?: { x: number; y: number } | null;
 }
 
-const BUBBLE_RADIUS = 160; // px — past this, bubbles dismiss
+const BUBBLE_RADIUS = 250; // px — past this, bubbles dismiss
 const LONG_PRESS_MS = 350; // ms to activate bubbles
 
 export function FocusCard({ 
@@ -77,15 +77,18 @@ export function FocusCard({
       return;
     }
 
-    const { x: dx, y: dy } = dragOffset;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const { x: actualX, y: actualY } = dragOffset;
 
     setActiveActionId(prev => {
       let next: string | null = null;
-      if (dist <= BUBBLE_RADIUS) {
-        if (dy < -50 && Math.abs(dx) < 50) next = "complete";
-        else if (dx < -40 && dy > 10) next = "delete";
-        else if (dx > 40 && dy > 10) next = "today";
+      const TRIGGER_THRESHOLD = 40; // Maintain generous hit area around bubble center
+
+      for (const action of BUBBLE_POSITIONS) {
+        const dist = Math.sqrt(Math.pow(actualX - action.pos.x, 2) + Math.pow(actualY - action.pos.y, 2));
+        if (dist <= TRIGGER_THRESHOLD) {
+          next = action.id;
+          break;
+        }
       }
       return prev === next ? prev : next;
     });
@@ -161,8 +164,7 @@ export function FocusCard({
         </div>
       )}
 
-      {/* PC Hover Actions */}
-      {!isMobile && (
+      {!isMobile && !isDragging && (
         <div className="absolute inset-0 bg-void/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-2xl flex items-center justify-center gap-4 z-10 pointer-events-auto">
           {onPlannedChange && (
             <button 
@@ -234,7 +236,7 @@ export function FocusCard({
           "relative bg-surface border rounded-2xl p-5 card-shadow cursor-pointer will-change-transform z-10",
           bubblesActive ? "transition-none" : "transition-all duration-300",
           isActive ? "bg-surface/90 border-transparent shadow-[0_0_30px_-10px_rgba(0,0,0,0.5)]" : "border-transparent hover:border-border/50",
-          !isMobile && "group-hover:border-border/30",
+          !isMobile && !isDragging && "group-hover:border-border/30",
           bubblesActive && "brightness-75 contrast-110"
         )}
         style={{ 

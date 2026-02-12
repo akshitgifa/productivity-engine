@@ -23,7 +23,12 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
   const [isDraggingInternal, setIsDraggingInternal] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [dragStartCenter, setDragStartCenter] = useState<{ x: number; y: number } | null>(null);
+  const [pointerStartRelativeOffset, setPointerStartRelativeOffset] = useState({ x: 0, y: 0 });
   const disableDragRef = useRef(disableDrag);
+
+  // Use a ref to store current drag offset and throttle updates
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const updateRequestedRef = useRef(false);
 
   // Keep ref in sync
   useEffect(() => {
@@ -52,15 +57,12 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
     return () => el.removeEventListener('touchmove', onTouchMove);
   }, []);
 
-  // Clear timer if disableDrag becomes true during a hold
   useEffect(() => {
     if (disableDrag) {
       clearHoldTimer();
     }
   }, [disableDrag, clearHoldTimer]);
 
-  // Swallow click events that fire immediately after a drag ends.
-  // Uses capture phase so it fires before the child's onClick.
   useEffect(() => {
     const el = itemRef.current;
     if (!el) return;
@@ -73,7 +75,7 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
       }
     };
 
-    el.addEventListener('click', swallowClick, true); // capture phase
+    el.addEventListener('click', swallowClick, true);
     return () => el.removeEventListener('click', swallowClick, true);
   }, []);
 
@@ -113,6 +115,7 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
   const onDragEndInternal = useCallback(() => {
     setIsDraggingInternal(false);
     setDragOffset({ x: 0, y: 0 });
+    dragOffsetRef.current = { x: 0, y: 0 };
     deactivateDrag();
   }, [deactivateDrag]);
 
@@ -136,20 +139,48 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (disableDrag) return; 
     
-    // Capture card center for bubble orientation
-    const rect = e.currentTarget.getBoundingClientRect();
-    setDragStartCenter({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
-
     isDragActivated.current = false;
     wasDragged.current = false;
     startPos.current = { x: e.clientX, y: e.clientY };
 
     holdTimerRef.current = setTimeout(() => {
-      if (disableDragRef.current) return;
+      if (disableDragRef.current || !itemRef.current) return;
+      
+      const rect = itemRef.current.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      
+      const relX = e.clientX - centerX;
+      const relY = e.clientY - centerY;
+      
+      setDragStartCenter({ x: centerX, y: centerY });
+      setPointerStartRelativeOffset({ x: relX, y: relY });
+
       activateDrag(e);
       setIsDraggingInternal(true);
+      
+      setDragOffset({ x: relX, y: relY });
+      dragOffsetRef.current = { x: relX, y: relY };
     }, HOLD_DELAY_MS);
   }, [activateDrag, disableDrag]);
+
+  // Throttled onDrag handler to prevent "Maximum update depth exceeded"
+  const onDrag = useCallback((_: any, info: any) => {
+    const nextX = info.offset.x + pointerStartRelativeOffset.x;
+    const nextY = info.offset.y + pointerStartRelativeOffset.y;
+    
+    if (Math.abs(nextX - dragOffsetRef.current.x) > 1 || Math.abs(nextY - dragOffsetRef.current.y) > 1) {
+      dragOffsetRef.current = { x: nextX, y: nextY };
+      
+      if (!updateRequestedRef.current) {
+        updateRequestedRef.current = true;
+        requestAnimationFrame(() => {
+          setDragOffset(dragOffsetRef.current);
+          updateRequestedRef.current = false;
+        });
+      }
+    }
+  }, [pointerStartRelativeOffset]);
 
   const clonedChild = React.useMemo(() => {
     if (React.isValidElement(children)) {
@@ -167,14 +198,9 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
       value={value}
       dragListener={false}
       dragControls={controls}
-      whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 100 }}
+      whileDrag={{ scale: 1.03, boxShadow: '0 20px 60px rgba(0,0,0,0.4)', zIndex: 100, pointerEvents: 'auto' }}
       onDragEnd={onDragEndInternal}
-      onDrag={(_, info) => {
-        // Only update if significantly changed to avoid loop
-        if (Math.abs(info.offset.x - dragOffset.x) > 0.5 || Math.abs(info.offset.y - dragOffset.y) > 0.5) {
-          setDragOffset({ x: info.offset.x, y: info.offset.y });
-        }
-      }}
+      onDrag={onDrag}
       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       as="div"
       className={isHigherZ ? "z-[100] relative" : "z-auto relative"}
@@ -192,4 +218,3 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
     </Reorder.Item>
   );
 }
-
