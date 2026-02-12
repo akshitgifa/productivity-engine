@@ -58,6 +58,7 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editedSubtaskTitle, setEditedSubtaskTitle] = useState("");
   const [editedRecurrence, setEditedRecurrence] = useState((task.recurrenceIntervalDays || "").toString());
+  const [editedRecurrenceType, setEditedRecurrenceType] = useState(task.recurrenceType || "completion");
 
   // Fetch Projects from Dexie
   const { data: projects = [] } = useQuery({
@@ -90,6 +91,7 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
       }
       if (updates.energy_tag !== undefined) domainUpdates.energyTag = updates.energy_tag;
       if (updates.recurrence_interval_days !== undefined) domainUpdates.recurrenceIntervalDays = updates.recurrence_interval_days;
+      if (updates.recurrence_type !== undefined) domainUpdates.recurrenceType = updates.recurrence_type;
       
       queryClient.setQueryData(["tasks", "active"], (old: any) => 
         old?.map((t: any) => t.id === task.id ? { ...t, ...domainUpdates } : t)
@@ -208,7 +210,8 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
     }
     setEditedDuration((task.durationMinutes || 30).toString());
     setEditedRecurrence((task.recurrenceIntervalDays || "").toString());
-  }, [task.id, task.title, task.durationMinutes, task.recurrenceIntervalDays, isEditingTitle]);
+    setEditedRecurrenceType(task.recurrenceType || "completion");
+  }, [task.id, task.title, task.durationMinutes, task.recurrenceIntervalDays, task.recurrenceType, isEditingTitle]);
 
   useEffect(() => {
     // Skip on mount, let the mount effect handle it
@@ -458,6 +461,21 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
                     />
                     <span className="text-[8px] font-bold text-zinc-600 uppercase tracking-widest shrink-0">Days</span>
                 </div>
+
+                {task.recurrenceIntervalDays && (
+                    <select 
+                        className="px-3 py-2 bg-void/50 border border-border/20 rounded-xl text-[8px] font-bold uppercase tracking-widest outline-none cursor-pointer hover:border-primary/30 transition-all appearance-none text-center text-zinc-400"
+                        value={editedRecurrenceType}
+                        onChange={(e) => {
+                            const val = e.target.value as 'completion' | 'schedule';
+                            setEditedRecurrenceType(val);
+                            updateTaskMutation.mutate({ recurrence_type: val });
+                        }}
+                    >
+                        <option value="completion">From Completion</option>
+                        <option value="schedule">From Schedule</option>
+                    </select>
+                )}
             </div>
           </div>
 

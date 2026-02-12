@@ -155,19 +155,30 @@ export const taskService = {
     }
 
     // 4. Handle Smart Recurrence
-    if (task.recurrenceIntervalDays) {
+    const dbTask = await db.tasks.get(task.id);
+    if (dbTask && dbTask.recurrence_interval_days) {
+      const interval = dbTask.recurrence_interval_days;
+      const type = dbTask.recurrence_type || 'completion';
+      
       const nextRunDate = new Date();
-      nextRunDate.setDate(nextRunDate.getDate() + task.recurrenceIntervalDays);
+      if (type === 'schedule' && dbTask.due_date) {
+        const baseDate = new Date(dbTask.due_date);
+        nextRunDate.setTime(baseDate.getTime() + (interval * 24 * 60 * 60 * 1000));
+      } else {
+        nextRunDate.setDate(nextRunDate.getDate() + interval);
+      }
 
       const newTask = {
         id: crypto.randomUUID(),
-        title: task.title,
-        project_id: task.projectId,
-        est_duration_minutes: task.durationMinutes || 30,
-        energy_tag: (task.energyTag as any) || "Shallow",
+        title: dbTask.title,
+        description: dbTask.description || undefined,
+        project_id: dbTask.project_id,
+        est_duration_minutes: dbTask.est_duration_minutes || 30,
+        energy_tag: dbTask.energy_tag || "Shallow",
         state: "Active" as const,
         is_deleted: false,
-        recurrence_interval_days: task.recurrenceIntervalDays,
+        recurrence_interval_days: interval,
+        recurrence_type: type,
         waiting_until: nextRunDate.toISOString(),
         sort_order: 0,
         created_at: now,

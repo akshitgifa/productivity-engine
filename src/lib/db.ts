@@ -37,6 +37,7 @@ export interface Task {
   energy_tag: 'Deep' | 'Normal' | 'Shallow';
   blocked_by_id?: string;
   recurrence_interval_days?: number;
+  recurrence_type?: 'completion' | 'schedule';
   sort_order: number;
   is_deleted?: boolean;
   last_touched_at: string;
@@ -116,6 +117,15 @@ export class EntropyDatabase extends Dexie {
       sync_outbox: '++id, timestamp'
     });
     this.version(6).stores({
+      projects: 'id, name, last_touched_at, is_deleted',
+      tasks: 'id, project_id, state, due_date, sort_order, is_deleted',
+      activity_logs: 'id, task_id, project_id',
+      notes: 'id, project_id, task_id, sort_order, is_read, is_deleted',
+      subtasks: 'id, task_id, is_deleted',
+      context_cards: 'id, project_id, is_deleted',
+      sync_outbox: '++id, timestamp'
+    });
+    this.version(7).stores({
       projects: 'id, name, last_touched_at, is_deleted',
       tasks: 'id, project_id, state, due_date, sort_order, is_deleted',
       activity_logs: 'id, task_id, project_id',

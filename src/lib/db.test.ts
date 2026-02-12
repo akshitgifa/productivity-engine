@@ -10,7 +10,9 @@ const mockFromMethods = {
   update: vi.fn(() => ({
     eq: vi.fn().mockResolvedValue({ error: null }),
   })),
+  upsert: vi.fn().mockResolvedValue({ error: null }),
   delete: vi.fn(() => ({
+    in: vi.fn().mockResolvedValue({ error: null }),
     eq: vi.fn().mockResolvedValue({ error: null }),
   })),
 };
@@ -31,6 +33,10 @@ vi.mock('./db', () => {
       delete: vi.fn().mockResolvedValue(undefined),
       toArray: vi.fn().mockResolvedValue([]),
       bulkPut: vi.fn().mockResolvedValue(undefined),
+      bulkGet: vi.fn().mockResolvedValue([]),
+      bulkDelete: vi.fn().mockResolvedValue(undefined),
+      put: vi.fn().mockResolvedValue(1),
+      get: vi.fn().mockResolvedValue(null),
     };
     
     table.where = vi.fn().mockReturnValue({
@@ -54,6 +60,8 @@ vi.mock('./db', () => {
       tasks: mockTable(),
       notes: mockTable(),
       activity_logs: mockTable(),
+      subtasks: mockTable(),
+      context_cards: mockTable(),
       documentation: mockTable(),
       sync_outbox: outbox,
       recordAction: async function(tableName: string, action: string, data: any) {
@@ -64,6 +72,7 @@ vi.mock('./db', () => {
           timestamp: Date.now()
         });
       },
+      ensureInbox: vi.fn().mockResolvedValue('c0ffee00-0000-0000-0000-000000000000'),
     },
   };
 });
@@ -110,7 +119,7 @@ describe('Database and Sync Logic', () => {
       await processOutbox();
 
       expect(mockSupabase.from).toHaveBeenCalledWith('tasks');
-      expect(db.sync_outbox.delete).toHaveBeenCalledWith(1);
+      expect(db.sync_outbox.bulkDelete).toHaveBeenCalledWith([1]);
     });
   });
 

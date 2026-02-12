@@ -56,7 +56,9 @@ export function QuickCaptureDrawer({
     projectName: "",
     duration: "30m",
     energy: "Normal",
-    dueDate: ""
+    dueDate: "",
+    recurrence: "",
+    recurrenceType: "completion"
   });
 
   // Effect to update projectName when manualData.projectId or projects change
@@ -128,6 +130,7 @@ export function QuickCaptureDrawer({
         est_duration_minutes: parseDuration(result.duration?.toString()) || 30,
         energy_tag: result.energy || 'Shallow',
         recurrence_interval_days: result.recurrence || null,
+        recurrence_type: result.recurrenceType || 'completion',
         due_date: result.dueDate || null,
         sort_order: 0,
         state: 'Active' as const,
@@ -192,7 +195,9 @@ export function QuickCaptureDrawer({
       projectName: "",
       duration: "30m",
       energy: "Normal",
-      dueDate: ""
+      dueDate: "",
+      recurrence: "",
+      recurrenceType: "completion"
     });
   };
 
@@ -280,7 +285,9 @@ export function QuickCaptureDrawer({
         projectName: matchingProject?.name || data.project || "",
         duration: data.duration || "30m",
         energy: data.energy || "Normal",
-        dueDate: data.dueDate ? new Date(new Date(data.dueDate).getTime() - new Date(data.dueDate).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ""
+        dueDate: data.dueDate ? new Date(new Date(data.dueDate).getTime() - new Date(data.dueDate).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
+        recurrence: data.recurrence || "",
+        recurrenceType: data.recurrenceType || "completion"
       });
       setIsAiEnabled(false);
       setIsExpanded(false);
@@ -336,7 +343,8 @@ export function QuickCaptureDrawer({
       energy: manualData.energy,
       projectId: manualData.projectId === "NONE" ? undefined : manualData.projectId,
       dueDate: manualData.dueDate || undefined,
-      recurrence: null
+      recurrence: manualData.recurrence === "" ? null : parseInt(manualData.recurrence),
+      recurrenceType: manualData.recurrenceType
     });
   };
 
@@ -569,6 +577,30 @@ export function QuickCaptureDrawer({
                           value={manualData.dueDate}
                           onChange={(val) => setManualData({ ...manualData, dueDate: val })}
                         />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest ml-1">Recurrence (Days)</label>
+                            <input 
+                                type="number"
+                                className="w-full bg-void border border-border rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-zinc-800"
+                                placeholder="e.g. 7"
+                                value={manualData.recurrence}
+                                onChange={(e) => setManualData({ ...manualData, recurrence: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest ml-1">Recurrence Type</label>
+                            <select 
+                                className="w-full bg-void border border-border rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none appearance-none"
+                                value={manualData.recurrenceType}
+                                onChange={(e) => setManualData({ ...manualData, recurrenceType: e.target.value as any })}
+                            >
+                                <option value="completion">From Completion</option>
+                                <option value="schedule">From Schedule</option>
+                            </select>
+                        </div>
                       </div>
                     </div>
                   )}

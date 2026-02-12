@@ -14,6 +14,7 @@ export interface Task {
   energyTag: 'Deep' | 'Normal' | 'Shallow';
   durationMinutes: number;
   recurrenceIntervalDays?: number;
+  recurrenceType: 'completion' | 'schedule';
   state: 'Active' | 'Waiting' | 'Blocked' | 'Completed' | 'Decayed' | 'Done';
   description?: string;
   subtasksCount?: number;
@@ -82,6 +83,7 @@ export function mapTaskData(t: any): Task {
     energyTag: t.energy_tag || "Shallow",
     durationMinutes: t.est_duration_minutes || 30,
     recurrenceIntervalDays: t.recurrence_interval_days,
+    recurrenceType: t.recurrence_type || 'completion',
     state: t.state || 'Active',
     description: t.description || "",
     subtasksCount: t.subtasks?.length || 0,

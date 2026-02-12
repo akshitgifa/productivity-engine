@@ -114,6 +114,8 @@ export function getTools(supabase: SupabaseClient, google: any) {
         due_date: z.string().optional().describe('ISO timestamp or YYYY-MM-DD'),
         est_duration_minutes: z.number().default(30),
         energy_tag: z.enum(['Grind', 'Creative', 'Shallow']).default('Shallow'),
+        recurrence_interval_days: z.number().optional(),
+        recurrence_type: z.enum(['completion', 'schedule']).default('completion'),
       }),
       execute: async (taskData: any) => {
         try {
@@ -132,6 +134,8 @@ export function getTools(supabase: SupabaseClient, google: any) {
             due_date: sanitizedDueDate,
             est_duration_minutes: taskData.est_duration_minutes,
             energy_tag: taskData.energy_tag,
+            recurrence_interval_days: taskData.recurrence_interval_days,
+            recurrence_type: taskData.recurrence_type,
           });
 
           const { data, error } = await supabase.from('tasks').insert(insertData).select('*, projects(name)').single();
@@ -341,10 +345,12 @@ export function getTools(supabase: SupabaseClient, google: any) {
       execute: async ({ timeAvailableMinutes, mode, limit }: any) => {
         try {
           console.log(`[AI TOOLS] >> EXECUTE get_syllabus:`, { timeAvailableMinutes, mode });
+          const nowIso = new Date().toISOString();
           const { data, error } = await supabase
             .from('tasks')
             .select('*, projects(name, tier, decay_threshold_days)')
-            .eq('state', 'Active');
+            .eq('state', 'Active')
+            .or(`waiting_until.is.null,waiting_until.lte.${nowIso}`);
           
           if (error) throw error;
           
@@ -487,6 +493,40 @@ export function getTools(supabase: SupabaseClient, google: any) {
 
           if (updateTask.error) throw updateTask.error;
           if (updateProject.error) throw updateProject.error;
+
+          // Handle Recurrence (Mirroring taskService.ts)
+          if (task.recurrence_interval_days) {
+            const interval = task.recurrence_interval_days;
+            const type = task.recurrence_type || 'completion';
+            const nextRunDate = new Date();
+            
+            if (type === 'schedule' && task.due_date) {
+               const baseDate = new Date(task.due_date);
+               nextRunDate.setTime(baseDate.getTime() + (interval * 24 * 60 * 60 * 1000));
+            } else {
+               nextRunDate.setDate(nextRunDate.getDate() + interval);
+            }
+
+            const nowIso = new Date().toISOString();
+            const newTask = {
+              title: task.title,
+              description: task.description,
+              project_id: task.project_id,
+              est_duration_minutes: task.est_duration_minutes || 30,
+              energy_tag: task.energy_tag || "Shallow",
+              state: "Active",
+              recurrence_interval_days: interval,
+              recurrence_type: type,
+              waiting_until: nextRunDate.toISOString(),
+              sort_order: 0,
+              created_at: nowIso,
+              updated_at: nowIso,
+              last_touched_at: nowIso,
+            };
+
+            const { error: recurrenceErr } = await supabase.from('tasks').insert(newTask);
+            if (recurrenceErr) console.error("[AI TOOLS] Recurrence error:", recurrenceErr);
+          }
 
           return { 
             success: true, 
