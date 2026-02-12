@@ -35,6 +35,7 @@ interface Project {
     enabledMetrics?: string[];
   };
   color?: string;
+  is_deleted?: boolean;
 }
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -85,11 +86,8 @@ export default function ProjectDetailPage() {
   const { data: tasks = [], isLoading: isTasksLoading } = useQuery<Task[]>({
     queryKey: ['tasks', 'project', id],
     queryFn: async () => {
-      const rawTasks = await db.tasks
-        .where('project_id')
-        .equals(id as string)
-        .toArray();
-      const mapped = rawTasks.map((t) => mapTaskData(t as any));
+      const activeTasks = await db.getActiveTasks({ projectId: id as string });
+      const mapped = activeTasks.map((t) => mapTaskData(t as any));
       return sortTasksByUserOrder(mapped, 'Deep Work');
     },
     enabled: !!id
@@ -99,8 +97,8 @@ export default function ProjectDetailPage() {
   const { data: projectNotes = [], isLoading: isNotesLoading } = useQuery<Note[]>({
     queryKey: ['notes', 'project', id],
     queryFn: async () => {
-      const allNotes = await db.notes.where('project_id').equals(id as string).toArray();
-      return allNotes.sort((a, b) => (b.sort_order ?? 0) - (a.sort_order ?? 0)) as Note[];
+      const activeNotes = await db.getActiveNotes({ projectId: id as string });
+      return activeNotes.sort((a, b) => (b.sort_order ?? 0) - (a.sort_order ?? 0)) as Note[];
     },
     enabled: !!id
   });
@@ -206,7 +204,6 @@ export default function ProjectDetailPage() {
       await db.projects.update(projectId, update);
       await db.recordAction('projects', 'update', { id: projectId, ...update });
       processOutbox().catch(() => {});
-      processOutbox().catch(() => {});
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -279,10 +276,19 @@ export default function ProjectDetailPage() {
 
   const displayTasks = taskFilter === "Active" ? activeTasks : taskFilter === "Waiting" ? waitingTasks : historyTasks;
 
+  useEffect(() => {
+    if (!isProjectLoading && (!project || project.is_deleted)) {
+      router.replace('/portfolio');
+    }
+  }, [project, isProjectLoading, router]);
+
   const isLoading = isProjectLoading || isTasksLoading;
 
   if (isLoading) return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-700 animate-pulse">Syncing Matrix...</div>;
-  if (!project) return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-rose-500/50">Entity Not Found</div>;
+  
+  if (!project || project.is_deleted) {
+    return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-rose-500/50">Entity Not Found</div>;
+  }
 
   const projectColor = getProjectColor(project.name, project.color);
   const tierColor = project.tier === 1 ? "text-tier-1" : project.tier === 2 ? "text-tier-2" : "text-tier-3";

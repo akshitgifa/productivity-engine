@@ -229,8 +229,8 @@ export default function ExportPage() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects", "export"],
     queryFn: async () => {
-      const data = await db.projects.orderBy("name").toArray();
-      return data as Project[];
+      const projects = await db.getActiveProjects();
+      return projects.sort((a, b) => a.name.localeCompare(b.name));
     },
   });
 
@@ -240,13 +240,10 @@ export default function ExportPage() {
       const startIso = startDate.toISOString();
       const endIso = endDate.toISOString();
 
-      const tasks = await db.tasks
-        .where("state")
-        .equals("Done")
-        .and((task) => task.updated_at >= startIso && task.updated_at <= endIso)
-        .toArray();
+      const tasks = await db.getActiveTasks({ state: 'Done' });
+      const filtered = tasks.filter((task) => task.updated_at >= startIso && task.updated_at <= endIso);
 
-      const sorted = tasks.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+      const sorted = filtered.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
       return await Promise.all(
         sorted.map(async (task) => {

@@ -147,6 +147,52 @@ export class EntropyDatabase extends Dexie {
   }
 
   /**
+   * Returns all non-deleted projects, sorted by name.
+   */
+  async getActiveProjects(): Promise<Project[]> {
+    const all = await this.projects.toArray();
+    return all.filter(p => !p.is_deleted);
+  }
+
+  /**
+   * Returns non-deleted tasks, filtered by state/project if provided.
+   * Also ensures the parent project isn't deleted.
+   */
+  async getActiveTasks(opts?: { state?: string; projectId?: string }): Promise<Task[]> {
+    // 1. Resolve deleted projects to filter out their tasks
+    const allProjects = await this.projects.toArray();
+    const deletedProjectIds = new Set(allProjects.filter(p => p.is_deleted).map(p => p.id));
+
+    // 2. Query tasks
+    const allTasks = await this.tasks.toArray();
+    
+    return allTasks.filter((t: Task) => {
+      if (t.is_deleted) return false;
+      if (opts?.state && t.state !== opts.state) return false;
+      if (opts?.projectId && t.project_id !== opts.projectId) return false;
+      if (t.project_id && deletedProjectIds.has(t.project_id)) return false;
+      return true;
+    });
+  }
+
+  /**
+   * Returns non-deleted notes.
+   */
+  async getActiveNotes(opts?: { projectId?: string }): Promise<Note[]> {
+    const allProjects = await this.projects.toArray();
+    const deletedProjectIds = new Set(allProjects.filter(p => p.is_deleted).map(p => p.id));
+
+    const allNotes = await this.notes.toArray();
+    
+    return allNotes.filter((n: Note) => {
+      if (n.is_deleted) return false;
+      if (opts?.projectId && n.project_id !== opts.projectId) return false;
+      if (n.project_id && deletedProjectIds.has(n.project_id)) return false;
+      return true;
+    });
+  }
+
+  /**
    * Ensures a persistent "Inbox" project exists and returns its ID.
    */
   async ensureInbox(): Promise<string> {

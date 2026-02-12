@@ -255,22 +255,21 @@ export function CustomDateTimePicker({
                              />
 
                              {/* Wheel Depth Gradients */}
-                             <div className="absolute inset-0 pointer-events-none z-20 bg-gradient-to-b from-surface via-transparent to-surface opacity-80" />
                           </div>
-
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              onChange(tempDate ? tempDate.toISOString() : "");
-                              setIsOpen(false);
-                            }}
-                            className="w-full bg-primary text-void py-3.5 rounded-xl font-black uppercase text-[10px] tracking-[0.2em] mt-8 card-shadow hover:opacity-90 transition-all border border-primary/20"
-                          >
-                            Set Deadline
-                          </button>
                        </div>
                     </div>
                   )}
+
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      onChange(tempDate ? tempDate.toISOString() : "");
+                      setIsOpen(false);
+                    }}
+                    className="w-full bg-primary text-void py-3.5 rounded-xl font-black uppercase text-[10px] tracking-[0.2em] mt-4 mb-2 card-shadow hover:opacity-90 transition-all border border-primary/20"
+                  >
+                    {tempDate ? (activeTab === "date" ? "Set Deadline" : "Confirm Time") : "Clear Deadline"}
+                  </button>
                 </div>
               </motion.div>
             </>

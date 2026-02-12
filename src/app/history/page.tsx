@@ -24,13 +24,9 @@ export default function HistoryPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['history'],
     queryFn: async () => {
-      const doneTasks = await db.tasks
-        .where('state')
-        .equals('Done')
-        .toArray();
+      const doneTasks = await db.getActiveTasks({ state: 'Done' });
 
-      const activeOnly = doneTasks.filter(t => !t.is_deleted);
-      const sorted = activeOnly.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+      const sorted = doneTasks.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
       return await Promise.all(
         sorted.map(async (t) => {

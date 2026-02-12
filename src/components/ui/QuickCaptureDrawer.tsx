@@ -43,7 +43,7 @@ export function QuickCaptureDrawer({
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
-      return await db.projects.toArray();
+      return await db.getActiveProjects();
     },
     enabled: isOpen
   });

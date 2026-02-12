@@ -31,11 +31,10 @@ export default function ReviewPage() {
       const allLogs = await db.activity_logs.toArray();
       const logs = allLogs.filter(log => log.completed_at >= lastWeekIso);
 
-      // 2. Fetch All Active/Waiting Tasks from Dexie
-      const tasks = await db.tasks
-        .where('state')
-        .anyOf(['Active', 'Waiting'])
-        .toArray();
+      // 2. Fetch All Active/Waiting Tasks from Dexie via helper
+      const activeTasks = await db.getActiveTasks({ state: 'Active' });
+      const waitingTasks = await db.getActiveTasks({ state: 'Waiting' });
+      const tasks = [...activeTasks, ...waitingTasks];
 
       // Join project names
       const tasksWithProjects = await Promise.all(

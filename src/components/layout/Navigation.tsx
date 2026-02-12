@@ -33,10 +33,8 @@ export function Navigation() {
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['unread_thoughts'],
     queryFn: async () => {
-      const count = await db.notes
-        .filter(n => n.is_read === false)
-        .count();
-      return count;
+      const unreadNotes = await db.notes.toArray();
+      return unreadNotes.filter(n => !n.is_read && !n.is_deleted).length;
     },
     refetchInterval: 30000,
     enabled: !isChat
@@ -69,7 +67,7 @@ export function Navigation() {
       queryClient.prefetchQuery({
         queryKey: ['projects'],
         queryFn: async () => {
-          const projects = await db.projects.toArray();
+          const projects = await db.getActiveProjects();
           return projects.sort((a, b) => a.tier - b.tier);
         }
       });
@@ -77,8 +75,8 @@ export function Navigation() {
       queryClient.prefetchQuery({
         queryKey: ['tasks', 'active'],
         queryFn: async () => {
-          const activeTasks = await db.tasks.where('state').equals('Active').toArray();
-          return activeTasks.filter(t => !t.is_deleted).map((t: any) => mapTaskData(t));
+          const activeTasks = await db.getActiveTasks({ state: 'Active' });
+          return activeTasks.map((t: any) => mapTaskData(t));
         }
       });
     }

@@ -28,13 +28,9 @@ export default function TasksPage() {
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['tasks', 'manager'],
     queryFn: async () => {
-      const allTasks = await db.tasks
-        .where('state')
-        .equals('Active')
-        .toArray();
+      const tasks = await db.getActiveTasks({ state: 'Active' });
       
-      const filtered = allTasks.filter(t => !t.is_deleted);
-      const mapped = await Promise.all(filtered.map(async (t) => {
+      const mapped = await Promise.all(tasks.map(async (t) => {
         const projects = t.project_id ? await db.projects.get(t.project_id) : null;
         return mapTaskData({ ...t, projects });
       }));

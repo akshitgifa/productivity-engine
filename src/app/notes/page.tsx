@@ -35,8 +35,8 @@ export default function NotesPage() {
   const { data: notes = [], isLoading } = useQuery({
     queryKey: ["notes"],
     queryFn: async () => {
-      const allNotes = await db.notes.toArray();
-      const sorted = allNotes.sort((a, b) => {
+      const activeNotes = await db.getActiveNotes();
+      const sorted = activeNotes.sort((a, b) => {
         const orderA = a.sort_order ?? 0;
         const orderB = b.sort_order ?? 0;
         if (orderA !== orderB) return orderA - orderB;
@@ -56,7 +56,8 @@ export default function NotesPage() {
   const { data: projects = [] } = useQuery({
     queryKey: ["projects"],
     queryFn: async () => {
-      return await db.projects.orderBy('name').toArray();
+      const projects = await db.getActiveProjects();
+      return projects.sort((a, b) => a.name.localeCompare(b.name));
     },
   });
 

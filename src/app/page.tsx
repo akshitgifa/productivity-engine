@@ -29,15 +29,11 @@ export default function Home() {
   const { data: allActive = [], isLoading: isTasksLoading } = useQuery({
     queryKey: ['tasks', 'today'],
     queryFn: async () => {
-      // Fetch tasks from local Dexie DB
-      const tasks = await db.tasks
-        .where('state')
-        .equals('Active')
-        .toArray();
+      // Fetch active tasks from centralized helper
+      const tasks = await db.getActiveTasks({ state: 'Active' });
       
-      // Filter by waiting_until and exclude soft-deleted
       const now = new Date().toISOString();
-      const filtered = tasks.filter(t => !t.is_deleted && (!t.waiting_until || t.waiting_until <= now));
+      const filtered = tasks.filter(t => !t.waiting_until || t.waiting_until <= now);
 
       // Enhance with project data (Manual join since Dexie is NoSQL-style)
       const enhanced = await Promise.all(filtered.map(async (t) => {
@@ -56,8 +52,7 @@ export default function Home() {
   const { data: projects = [] } = useQuery({
     queryKey: ['projects', 'all'],
     queryFn: async () => {
-      const all = await db.projects.orderBy('name').toArray();
-      return all.filter((p: any) => !p.is_deleted);
+      return await db.getActiveProjects();
     }
   });
 
@@ -76,14 +71,10 @@ export default function Home() {
   const { data: completedToday = [] } = useQuery({
     queryKey: ['history', 'recent'],
     queryFn: async () => {
-      const tasks = await db.tasks
-        .where('state')
-        .equals('Done')
-        .reverse()
-        .limit(3)
-        .toArray();
+      const tasks = await db.getActiveTasks({ state: 'Done' });
+      const recent = tasks.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 3);
       
-      return await Promise.all(tasks.filter(t => !t.is_deleted).map(async (t) => {
+      return await Promise.all(recent.map(async (t) => {
         const projects = t.project_id ? await db.projects.get(t.project_id) : null;
         return { ...t, projects };
       }));

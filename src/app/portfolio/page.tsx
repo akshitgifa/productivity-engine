@@ -25,8 +25,8 @@ export default function PortfolioPage() {
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ['projects'],
     queryFn: async () => {
-      const allProjects = await db.projects.orderBy('name').toArray();
-      return allProjects.sort((a, b) => a.tier - b.tier) as Project[];
+      const activeProjects = await db.getActiveProjects();
+      return activeProjects.sort((a, b) => a.tier - b.tier) as Project[];
     }
   });
 
