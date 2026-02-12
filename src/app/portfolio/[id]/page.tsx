@@ -54,7 +54,8 @@ export default function ProjectDetailPage() {
   });
   const [isEditingContext, setIsEditingContext] = useState(false);
   const [contextInput, setContextInput] = useState("");
-  const [activeTab, setActiveTab] = useState<"Active" | "Waiting" | "History" | "Notes">("Active");
+  const [mainTab, setMainTab] = useState<"Tasks" | "Notes">("Tasks");
+  const [taskFilter, setTaskFilter] = useState<"Active" | "Waiting" | "History">("Active");
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const { metrics, isLoading: isAnalyticsLoading } = useProjectAnalytics(id as string);
   const { completeTask } = useTaskFulfillment();
@@ -269,6 +270,15 @@ export default function ProjectDetailPage() {
 
   const selectedTask = (tasks as any[]).find(t => t.id === selectedTaskId);
 
+  // Filtering Logic
+  const now = new Date().toISOString();
+  
+  const activeTasks = tasks.filter(t => t.state === 'Active' && (!t.waitingUntil || t.waitingUntil.toISOString() <= now));
+  const waitingTasks = tasks.filter(t => t.state === 'Waiting' || (t.state === 'Active' && t.waitingUntil && t.waitingUntil.toISOString() > now));
+  const historyTasks = tasks.filter(t => t.state === 'Done');
+
+  const displayTasks = taskFilter === "Active" ? activeTasks : taskFilter === "Waiting" ? waitingTasks : historyTasks;
+
   const isLoading = isProjectLoading || isTasksLoading;
 
   if (isLoading) return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-700 animate-pulse">Syncing Matrix...</div>;
@@ -278,7 +288,8 @@ export default function ProjectDetailPage() {
   const tierColor = project.tier === 1 ? "text-tier-1" : project.tier === 2 ? "text-tier-2" : "text-tier-3";
 
   return (
-    <div className="px-6 pt-12 pb-32 max-w-md md:max-w-7xl mx-auto">
+    <div className="px-6 pt-12 pb-32 max-w-md md:max-w-7xl mx-auto overflow-x-hidden">
+      {/* ... header ... */}
       <header className="mb-10">
         <Link href="/portfolio" className="flex items-center gap-2 text-zinc-600 hover:text-white transition-all mb-8 group">
           <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
@@ -310,11 +321,12 @@ export default function ProjectDetailPage() {
           </button>
         </div>
       </header>
-
+      {/* ... grid ... */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
-        {/* Left Column: Stats & Settings */}
+        {/* Left Column (Stats) */}
         <div className="md:col-span-5 lg:col-span-12 xl:col-span-4 space-y-8">
-          {isEditing && (
+            {/* ... stats sections ... */}
+            {isEditing && (
             <section className="bg-surface border border-primary/20 rounded-3xl p-8 space-y-6 animate-in fade-in slide-in-from-top-4 card-shadow">
               <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em]">Configuration</p>
               
@@ -491,10 +503,9 @@ export default function ProjectDetailPage() {
           )}
         </div>
 
-        {/* Right Column: Context & Execution */}
+        {/* Right Column (Context & Execution) */}
         <div className="md:col-span-7 lg:col-span-12 xl:col-span-8 space-y-10">
-          
-          {/* Project Context Card */}
+          {/* Context Card ... */}
           <section className="bg-surface border border-border/30 rounded-3xl p-8 card-shadow relative overflow-hidden group">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -557,101 +568,144 @@ export default function ProjectDetailPage() {
 
           <KPIManager projectId={project.id} />
 
-          <section>
-            <div className="flex items-center justify-between mb-8 px-1">
-              <div className="flex gap-4 p-1 bg-surface/50 rounded-2xl border border-border/30">
-                {(["Active", "Waiting", "History", "Notes"] as const).map((tab) => (
+          {/* New Two-Tier Tab System */}
+          <section className="space-y-6">
+            <div className="flex flex-col gap-6">
+              {/* Level 1: Major Buttons */}
+              <div className="flex gap-2 p-1 bg-surface/30 rounded-2xl border border-border/20 w-fit">
+                {(["Tasks", "Notes"] as const).map((tab) => (
                   <button
                     key={tab}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => setMainTab(tab)}
                     className={cn(
-                      "px-6 py-2.5 text-[10px] font-bold uppercase tracking-[0.2em] transition-all rounded-xl",
-                      activeTab === tab 
-                        ? "text-void card-shadow" 
+                      "px-8 py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all rounded-xl",
+                      mainTab === tab 
+                        ? "text-void card-shadow shadow-lg" 
                         : "text-zinc-500 hover:text-zinc-300"
                     )}
-                    style={activeTab === tab ? { backgroundColor: projectColor } : {}}
+                    style={mainTab === tab ? { backgroundColor: projectColor } : {}}
                   >
                     {tab}
                   </button>
                 ))}
               </div>
-              <div className="hidden md:flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: projectColor, opacity: 0.4 }} />
-                <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
-                  {activeTab === "Notes" ? projectNotes.length : tasks.filter(t => activeTab === "History" ? t.state === 'Done' : t.state === activeTab).length} Entities
-                </span>
-              </div>
+
+              {/* Level 2: Task Sub-filters */}
+              {mainTab === "Tasks" && (
+                <div className="flex flex-wrap gap-2 p-1 bg-surface/50 rounded-2xl border border-border/30 w-fit">
+                  {(["Active", "Waiting", "History"] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setTaskFilter(filter)}
+                      className={cn(
+                        "px-6 py-2 text-[10px] font-bold uppercase tracking-[0.15em] transition-all rounded-xl border border-transparent",
+                        taskFilter === filter 
+                          ? "bg-zinc-800 text-white border-zinc-700 shadow-sm" 
+                          : "text-zinc-500 hover:text-zinc-300"
+                      )}
+                    >
+                      {filter}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 px-1 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: projectColor, opacity: 0.4 }} />
+              <span>
+                {mainTab === "Notes" ? `${projectNotes.length} Insights` : `${displayTasks.length} Operations`}
+              </span>
             </div>
 
             <AnimatePresence mode="wait">
               <motion.div 
-                key={activeTab}
+                key={`${mainTab}-${taskFilter}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
               >
-                {(() => {
-                  const tabTasks = tasks.filter(t => activeTab === "History" ? t.state === 'Done' : t.state === activeTab);
-                  if (tabTasks.length === 0) {
-                    return (
+                {mainTab === "Tasks" ? (
+                  <>
+                    {displayTasks.length === 0 ? (
                       <div className="text-center py-32 bg-surface/30 border border-dashed border-border/50 rounded-3xl">
                         <div className="w-16 h-16 bg-void/50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-border">
                           <Brain className="text-zinc-800" size={32} />
                         </div>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Zero focus fragments in {activeTab} state</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Zero active fragments in this sector</p>
                       </div>
-                    );
-                  }
-
-                  if (activeTab === 'Active') {
-                    return (
-                      <Reorder.Group
-                        axis="y"
-                        values={tabTasks}
-                        onReorder={(reordered) => handleReorderProjectTasks(reordered)}
-                        className="flex flex-col gap-4"
-                        as="div"
-                      >
-                        {tabTasks.map((task) => (
-                          <ReorderableItem
-                            key={task.id}
-                            value={task}
-                          >
-                            <FocusCard 
-                              title={task.title}
-                              project={project.name}
-                              tier={project.tier as any}
-                              duration={`${task.durationMinutes}m`}
-                              dueDate={task.dueDate}
-                              isActive={true}
-                              onDelete={() => handleDeleteTask(task.id)}
-                              onComplete={() => handleComplete(task)}
-                              onClick={() => setSelectedTaskId(task.id)}
-                              subtasksCount={task.subtasksCount}
-                              completedSubtasksCount={task.completedSubtasksCount}
-                              projectColor={projectColor}
-                            />
-                          </ReorderableItem>
-                        ))}
-                      </Reorder.Group>
-                    );
-                  }
-
-                  if (activeTab === 'Notes') {
-                    if (projectNotes.length === 0) {
-                      return (
-                        <div className="text-center py-32 bg-surface/30 border border-dashed border-border/50 rounded-3xl">
-                          <div className="w-16 h-16 bg-void/50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-border">
-                            <Book className="text-zinc-800" size={32} />
-                          </div>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Zero strategic notes in this sector</p>
+                    ) : (
+                      taskFilter === 'Active' ? (
+                        <Reorder.Group
+                          axis="y"
+                          values={displayTasks}
+                          onReorder={(reordered) => handleReorderProjectTasks(reordered)}
+                          className="flex flex-col gap-4"
+                          as="div"
+                        >
+                          {displayTasks.map((task) => (
+                            <ReorderableItem
+                              key={task.id}
+                              value={task}
+                            >
+                              <FocusCard 
+                                title={task.title}
+                                project={project.name}
+                                tier={project.tier as any}
+                                duration={`${task.durationMinutes}m`}
+                                dueDate={task.dueDate}
+                                isActive={true}
+                                onDelete={() => handleDeleteTask(task.id)}
+                                onComplete={() => handleComplete(task)}
+                                onClick={() => setSelectedTaskId(task.id)}
+                                subtasksCount={task.subtasksCount}
+                                completedSubtasksCount={task.completedSubtasksCount}
+                                projectColor={projectColor}
+                              />
+                            </ReorderableItem>
+                          ))}
+                        </Reorder.Group>
+                      ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          {displayTasks.map((task, index) => (
+                            <motion.div
+                              key={task.id}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: index * 0.05 }}
+                            >
+                              <FocusCard 
+                                title={task.title}
+                                project={project.name}
+                                tier={project.tier as any}
+                                duration={`${task.durationMinutes}m`}
+                                dueDate={task.dueDate}
+                                isActive={task.state === 'Active'}
+                                onUndo={taskFilter === 'History' ? () => handleUndo(task.id) : undefined}
+                                onDelete={() => handleDeleteTask(task.id)}
+                                onComplete={task.state === 'Active' ? () => handleComplete(task) : undefined}
+                                onClick={() => setSelectedTaskId(task.id)}
+                                subtasksCount={task.subtasksCount}
+                                completedSubtasksCount={task.completedSubtasksCount}
+                                projectColor={projectColor}
+                              />
+                            </motion.div>
+                          ))}
                         </div>
-                      );
-                    }
-
-                    return (
+                      )
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {projectNotes.length === 0 ? (
+                      <div className="text-center py-32 bg-surface/30 border border-dashed border-border/50 rounded-3xl">
+                        <div className="w-16 h-16 bg-void/50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-border">
+                          <Book className="text-zinc-800" size={32} />
+                        </div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Zero strategic notes in this sector</p>
+                      </div>
+                    ) : (
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {projectNotes.map((note) => (
                           <NoteCard 
@@ -664,38 +718,9 @@ export default function ProjectDetailPage() {
                           />
                         ))}
                       </div>
-                    );
-                  }
-
-                  return (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      {tabTasks.map((task, index) => (
-                        <motion.div
-                          key={task.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                        >
-                          <FocusCard 
-                            title={task.title}
-                            project={project.name}
-                            tier={project.tier as any}
-                            duration={`${task.durationMinutes}m`}
-                            dueDate={task.dueDate}
-                            isActive={task.state === 'Active'}
-                            onUndo={activeTab === 'History' ? () => handleUndo(task.id) : undefined}
-                            onDelete={() => handleDeleteTask(task.id)}
-                            onComplete={task.state === 'Active' ? () => handleComplete(task) : undefined}
-                            onClick={() => setSelectedTaskId(task.id)}
-                            subtasksCount={task.subtasksCount}
-                            completedSubtasksCount={task.completedSubtasksCount}
-                            projectColor={projectColor}
-                          />
-                        </motion.div>
-                      ))}
-                    </div>
-                  );
-                })()}
+                    )}
+                  </>
+                )}
               </motion.div>
             </AnimatePresence>
           </section>
