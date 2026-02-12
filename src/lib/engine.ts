@@ -92,11 +92,6 @@ export function mapTaskData(t: any): Task {
   };
 }
 
-export function filterAdminTasks(tasks: Task[]): { focus: Task[], admin: Task[] } {
-  const admin = tasks.filter(t => t.durationMinutes < 10); // Batch anything < 10 mins
-  const focus = tasks.filter(t => t.durationMinutes >= 10);
-  return { focus, admin };
-}
 
 export function sortTasksByUrgency(tasks: Task[], currentMode: SessionMode): Task[] {
   return [...tasks].sort((a, b) => {

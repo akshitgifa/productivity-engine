@@ -9,7 +9,7 @@ import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 import { CheckCircle2, Share2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { sortTasksByUserOrder, filterAdminTasks, mapTaskData, Task } from "@/lib/engine";
+import { sortTasksByUserOrder, mapTaskData, Task } from "@/lib/engine";
 import { taskService } from '@/lib/taskService';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
@@ -183,8 +183,7 @@ export default function Home() {
     constrainedTasks = constrainedTasks.filter(t => t.durationMinutes <= timeAvailable);
   }
 
-  const sorted = sortTasksByUserOrder(constrainedTasks, mode);
-  const { focus: focusTasks, admin: adminTasks } = filterAdminTasks(sorted);
+  const sortedTasks = sortTasksByUserOrder(constrainedTasks, mode);
   const isLoading = isTasksLoading;
 
   // Reorder handler: updates sort_order locally in Dexie and syncs via outbox
@@ -328,15 +327,15 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          ) : focusTasks.length > 0 ? (
+          ) : sortedTasks.length > 0 ? (
             <Reorder.Group
               axis="y"
-              values={focusTasks}
+              values={sortedTasks}
               onReorder={(reordered) => handleReorder(reordered)}
               className="flex flex-col gap-4"
               as="div"
             >
-              {focusTasks.map((task) => (
+              {sortedTasks.map((task) => (
                 <ReorderableItem
                   key={task.id}
                   value={task}
@@ -401,29 +400,6 @@ export default function Home() {
             </section>
           )}
 
-          <Link 
-            href="/tasks"
-            className={cn(
-              "p-6 bg-surface/30 border border-dashed border-border rounded-3xl block transition-all group hover:border-primary/50 hover:bg-surface/50 card-shadow",
-              adminTasks.length === 0 ? "opacity-30 grayscale" : "opacity-80"
-            )}
-          >
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-[10px] font-extrabold uppercase tracking-[0.2em] block text-zinc-500 group-hover:text-primary transition-colors">
-                Admin Batch
-              </span>
-              {adminTasks.length > 0 && (
-                <span className="bg-primary/10 text-primary text-[9px] font-bold px-2 py-1 rounded-lg animate-pulse uppercase tracking-widest">
-                  {adminTasks.length} Detected
-                </span>
-              )}
-            </div>
-            <div className="text-sm font-medium text-zinc-500 leading-relaxed group-hover:text-zinc-300 transition-colors">
-               {adminTasks.length > 0 
-                ? `${adminTasks.length} micro-tasks aggregated. Click to process fragmented subtasks.` 
-                : "System stability optimal. No fragmentation detected."}
-            </div>
-          </Link>
         </div>
       </div>
 

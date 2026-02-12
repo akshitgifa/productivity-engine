@@ -31,7 +31,6 @@
 - [ ] Dynamic KPI suggestions based on task completion patterns
 
 ### Execution Optimization
-- [ ] "Admin Hour" mode — batch shallow tasks into focused sprints
 - [ ] Pomodoro integration — timer synced with session modes
 
 ### Knowledge Graph
