@@ -77,6 +77,20 @@ Execution is divided into 5 testable phases. **USER MUST TEST AFTER EACH PHASE.*
 
 ---
 
+## Phase 2.8: Account & Identity ✅
+**Goal:** Secure multi-user support and personal environment settings.
+
+### Tasks
+- [x] **2.8.1 Auth:** Fully integrated Supabase Auth with registration, login, and email verification.
+- [x] **2.8.2 Flow:** Implemented "Forgot Password" and "Reset Password" security loops.
+- [x] **2.8.3 Identity:** Build "Profile" page for managing display names and user metadata.
+- [x] **2.8.4 Preferences:** Build "Settings" page for Focus Window and connectivity monitoring.
+- [x] **2.8.5 Privacy:** Isolated all local data per-user and implemented multi-tab multi-user safety.
+
+**TESTED ✅:** User verified registration, login, and profile persistency.
+
+---
+
 ## Phase 3: Background Intelligence (The Subconscious)
 **Goal:** Subagents and web research.
 

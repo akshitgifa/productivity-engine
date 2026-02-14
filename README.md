@@ -7,6 +7,13 @@
 
 Entropy is a high-performance productivity engine for power users managing multiple projects. It models neglected work as **entropy** — the inevitable decay of unattended priorities — ensuring nothing critical slips through while hiding what doesn't matter *now*.
 
+### Account & Identity
+Entropy now features a full-access **Identity System**:
+- **Secure Authentication**: Built-in login, registration, and email verification via Supabase Auth.
+- **Forgot Password**: Fully integrated password recovery and reset flows.
+- **User Profiles**: Persistent user metadata including display names and email management.
+- **Localized Settings**: Customizable focus windows and real-time connectivity monitoring.
+
 ---
 
 ## Architecture
@@ -25,6 +32,9 @@ The sync engine is optimized for speed and production-grade reliability:
 - **Concurrent Pulls**: Multiple tables are synchronized simultaneously using `Promise.all` to eliminate boot-time bottlenecks.
 - **Multi-Tab Mutex**: Leverages the Web Locks API to ensure only one tab synchronizes with Supabase at a time, preventing race conditions and redundant API calls.
 - **Failure-Aware Outbox**: Sync outbox includes a retry mechanism and batching to ensure transient failures don't block the data queue.
+
+### Identity & Profiles
+Secure authentication, multi-user isolation, and customizable profile settings are integrated directly into the local-first engine.
 
 ### Soft-Delete & Undo System
 Mutations follow a **Soft-Delete** pattern:
@@ -60,7 +70,8 @@ Setting a deadline resets `sort_order` to 0 (enters deadline pool). Dragging ass
 - **AI Assistant**: Multimodal chat (text + voice) with tool access to the full database
 - **Quick Capture**: Voice → transcription → structured task creation in one flow
 - **Notes**: Standalone AI-enhanced knowledge base with markdown editing
-- **Export**: Screenshot-ready progress reports with privacy controls
+- **Export**: Screenshot-ready progress reports with privacy controls and automatic profile name integration
+- **Profile & Settings**: Centralized account management and engine preference control
 - **Smart Recurrence**: Completed recurring tasks auto-spawn with `waiting_until` dates
 - **Master List**: Unified view of all fragments in the system
 
@@ -78,6 +89,7 @@ pnpm install
 cp .env.example .env.local
 # Required: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
 #           GEMINI_API_KEY, SUPABASE_SERVICE_ROLE_KEY
+# Optional: SUPABASE_AUTH_EXTERNAL_URL (for custom callback domains)
 pnpm dev
 ```
 

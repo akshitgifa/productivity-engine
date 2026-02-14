@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { FocusCard } from "@/components/ui/FocusCard";
 import { Search, Filter, Trash2, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
@@ -11,6 +11,7 @@ import { taskService } from '@/lib/taskService';
 import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { Task } from "@/lib/engine";
+import { ProjectSection } from "@/components/tasks/ProjectSection";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -161,6 +162,30 @@ export default function TasksPage() {
     return inTitle || inProject || inDescription;
   });
 
+  // Group tasks by project
+  const groupedTasks = useMemo(() => {
+    const groups: Record<string, { id: string, name: string, tasks: Task[] }> = {};
+    
+    filteredTasks.forEach(task => {
+      const pid = task.projectId || 'c0ffee00-0000-0000-0000-000000000000';
+      if (!groups[pid]) {
+        groups[pid] = {
+          id: pid,
+          name: task.projectName || 'Inbox',
+          tasks: []
+        };
+      }
+      groups[pid].tasks.push(task);
+    });
+    
+    return Object.values(groups).sort((a, b) => {
+      const tierA = a.tasks[0]?.projectTier || 3;
+      const tierB = b.tasks[0]?.projectTier || 3;
+      if (tierA !== tierB) return tierA - tierB;
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredTasks]);
+
   const handleComplete = useCallback((task: any) => {
     if (completeMutation.isPending) return;
     completeMutation.mutate(task);
@@ -219,36 +244,17 @@ export default function TasksPage() {
                 </div>
              ))
           ) : (
-            <Reorder.Group
-              axis="y"
-              values={filteredTasks}
-              onReorder={(reordered) => handleReorder(reordered)}
-              className="col-span-full flex flex-col gap-4"
-              as="div"
-            >
-              {filteredTasks.map((task: any) => (
-                <ReorderableItem
-                  key={task.id}
-                  value={task}
-                  onDragEnd={persistReorder}
-                >
-                  <FocusCard 
-                    key={task.id}
-                    title={task.title}
-                    project={task.projectName}
-                    tier={task.projectTier as any}
-                    duration={`${task.durationMinutes}m`}
-                    dueDate={task.dueDate}
-                    isActive={task.state === 'Active'}
-                    onComplete={() => handleComplete(task)}
-                    onDelete={() => handleDelete(task.id)}
-                    onClick={() => setSelectedTaskId(task.id)}
-                    subtasksCount={task.subtasksCount}
-                    completedSubtasksCount={task.completedSubtasksCount}
-                  />
-                </ReorderableItem>
+            <div className="col-span-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
+              {groupedTasks.map((group: any) => (
+                <ProjectSection 
+                  key={group.id}
+                  projectId={group.id}
+                  projectName={group.name}
+                  tasks={group.tasks}
+                  onTaskClick={(id) => setSelectedTaskId(id)}
+                />
               ))}
-            </Reorder.Group>
+            </div>
           )}
         </div>
 

@@ -19,6 +19,7 @@
 - **Notes:** AI-enhanced knowledge base for unstructured thoughts.
 - **Quick Capture:** Rapid mobile-first entry for tasks via text or voice.
 - **High-Performance Sync:** Parallelized pulls with metadata-driven validation (skips unchanged tables) and multi-tab mutex handles concurrency.
+- **Identity & Profiles:** Secure authentication, multi-user isolation, and customizable profile settings.
 - **Soft-Delete with Undo:** 5-second safety window for deleted items.
 
 ### v2.0 Vision: The Second Brain

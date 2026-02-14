@@ -17,6 +17,7 @@ import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { db } from "@/lib/db";
 import { toLocalISOString, isTodayLocal } from "@/lib/dateUtils";
 import { UserProfile } from "@/components/layout/UserProfile";
+import { ProjectSection } from "@/components/tasks/ProjectSection";
 
 export default function Home() {
   const { timeAvailable } = useUserStore();
@@ -253,6 +254,38 @@ export default function Home() {
     });
   }, [allActive, projectFilters, timeAvailable, viewMode, todayStr]);
 
+  // Group tasks by project for Master List
+  const groupedMasterTasks = useMemo(() => {
+    if (viewMode !== 'Master') return [];
+    
+    // Use memoizedDisplayTasks which already has project/filter logic applied
+    const tasks = memoizedDisplayTasks;
+    const groups: Record<string, { id: string, name: string, tasks: Task[] }> = {};
+    
+    tasks.forEach(task => {
+      const pid = task.projectId || 'c0ffee00-0000-0000-0000-000000000000';
+      if (!groups[pid]) {
+        groups[pid] = {
+          id: pid,
+          name: task.projectName || 'Inbox',
+          tasks: []
+        };
+      }
+      groups[pid].tasks.push(task);
+    });
+    
+    // Sort projects: Tier 1 first, then Inbox (tier 4) last, etc.
+    // We need to fetch tiers for sorting if they aren't in the task object reliably
+    // Based on engine.ts mapTaskData, task.projectTier is available.
+    
+    return Object.values(groups).sort((a, b) => {
+      const tierA = a.tasks[0]?.projectTier || 3;
+      const tierB = b.tasks[0]?.projectTier || 3;
+      if (tierA !== tierB) return tierA - tierB;
+      return a.name.localeCompare(b.name);
+    });
+  }, [memoizedDisplayTasks, viewMode]);
+
   const isLoading = isTasksLoading;
 
   useEffect(() => {
@@ -404,7 +437,10 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="md:col-span-12 lg:col-span-8 space-y-4">
+        <div className={cn(
+          "md:col-span-12 space-y-4",
+          viewMode === 'Today' ? "lg:col-span-8" : "lg:col-span-12"
+        )}>
           <div className="flex items-center justify-between mb-4 md:mb-6">
             <h2 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
               Focus Objectives
@@ -421,7 +457,7 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          ) : displayedTasks.length > 0 ? (
+          ) : viewMode === 'Today' && displayedTasks.length > 0 ? (
             <Reorder.Group
               axis="y"
               values={displayedTasks}
@@ -454,6 +490,18 @@ export default function Home() {
                 </ReorderableItem>
               ))}
             </Reorder.Group>
+          ) : viewMode === 'Master' && groupedMasterTasks.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
+              {groupedMasterTasks.map(group => (
+                <ProjectSection
+                  key={group.id}
+                  projectId={group.id}
+                  projectName={group.name}
+                  tasks={group.tasks}
+                  onTaskClick={(id) => setSelectedTaskId(id)}
+                />
+              ))}
+            </div>
           ) : viewMode === 'Today' ? (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <div className="text-center py-24 border border-dashed border-border/30 rounded-[3rem] bg-surface/20">
@@ -503,37 +551,38 @@ export default function Home() {
           )}
         </div>
 
-        <div className="md:col-span-12 lg:col-span-4 space-y-8">
-          {completedToday.length > 0 && (
-            <section>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                  Recent Momentum
-                </h2>
-                <Link href="/history" className="text-[10px] font-bold text-primary uppercase tracking-widest hover:underline">
-                  View All
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {completedToday.map((task: any) => (
-                  <div key={task.id} className="bg-surface/50 border border-transparent rounded-2xl p-4 flex items-center justify-between group card-shadow hover:border-border/30 transition-all">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                        <CheckCircle2 size={16} className="text-emerald-500/50" />
+        {viewMode === 'Today' && (
+          <div className="md:col-span-12 lg:col-span-4 space-y-8">
+            {completedToday.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                    Recent Momentum
+                  </h2>
+                  <Link href="/history" className="text-[10px] font-bold text-primary uppercase tracking-widest hover:underline">
+                    View All
+                  </Link>
+                </div>
+                <div className="space-y-3">
+                  {completedToday.map((task: any) => (
+                    <div key={task.id} className="bg-surface/50 border border-transparent rounded-2xl p-4 flex items-center justify-between group card-shadow hover:border-border/30 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                          <CheckCircle2 size={16} className="text-emerald-500/50" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-zinc-300 line-clamp-1">{task.title}</p>
+                           <p className="text-[9px] font-bold text-zinc-600 uppercase italic leading-none mt-1.5">{task.projects?.name || 'Inbox'}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-zinc-300 line-clamp-1">{task.title}</p>
-                         <p className="text-[9px] font-bold text-zinc-600 uppercase italic leading-none mt-1.5">{task.projects?.name || 'Inbox'}</p>
-                      </div>
+                      <span className="text-[10px] font-bold text-zinc-700 uppercase bg-void/50 px-2 py-1 rounded-lg border border-border/20">{task.est_duration_minutes}m</span>
                     </div>
-                    <span className="text-[10px] font-bold text-zinc-700 uppercase bg-void/50 px-2 py-1 rounded-lg border border-border/20">{task.est_duration_minutes}m</span>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-        </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
       </div>
 
       <AnimatePresence>
