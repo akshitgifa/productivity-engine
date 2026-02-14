@@ -221,9 +221,11 @@ export default function Home() {
       });
     }
 
+    /* 
     if (timeAvailable) {
       filtered = filtered.filter(t => t.durationMinutes <= timeAvailable);
     }
+    */
 
     if (viewMode !== 'Today') return filtered;
 

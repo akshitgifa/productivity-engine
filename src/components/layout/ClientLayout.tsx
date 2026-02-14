@@ -25,7 +25,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
                  pathname?.startsWith("/register") || 
                  pathname?.startsWith("/forgot-password") || 
                  pathname?.startsWith("/reset-password");
-  const hideChrome = isChat || isExport || isAuth;
+  const isProfileOrSettings = pathname === "/profile" || pathname === "/settings";
+  const hideChrome = isChat || isExport || isAuth || isProfileOrSettings;
 
   React.useEffect(() => {
     // PWA Service Worker Registration

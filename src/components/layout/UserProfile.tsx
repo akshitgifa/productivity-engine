@@ -5,6 +5,7 @@ import { useAuth } from '@/providers/AuthProvider'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Settings, LogOut, User, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
 
 export function UserProfile() {
   const { user, signOut } = useAuth()
@@ -62,14 +63,22 @@ export function UserProfile() {
             </div>
 
             <div className="space-y-1">
-              <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-all text-[11px] font-bold uppercase tracking-widest">
+              <Link 
+                href="/profile"
+                onClick={() => setIsOpen(false)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-all text-[11px] font-bold uppercase tracking-widest"
+              >
                 <User size={16} />
                 <span>Profile</span>
-              </button>
-              <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-all text-[11px] font-bold uppercase tracking-widest">
+              </Link>
+              <Link 
+                href="/settings"
+                onClick={() => setIsOpen(false)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-all text-[11px] font-bold uppercase tracking-widest"
+              >
                 <Settings size={16} />
                 <span>Settings</span>
-              </button>
+              </Link>
               <div className="h-px bg-white/5 my-2 mx-2" />
               <button
                 onClick={() => signOut()}

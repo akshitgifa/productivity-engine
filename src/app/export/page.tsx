@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase";
+import { useAuth } from "@/providers/AuthProvider";
 import { db } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
@@ -93,6 +94,7 @@ export default function ExportPage() {
   const [durationValue, setDurationValue] = useState(1);
   const [durationUnit, setDurationUnit] = useState<"hours" | "days">("hours");
 
+  const { user } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [cleanView, setCleanView] = useState(false);
   const [showExitHint, setShowExitHint] = useState(false);
@@ -105,8 +107,26 @@ export default function ExportPage() {
   const [attribution, setAttribution] = useState<"powered" | "shared" | "hidden">("powered");
 
   useEffect(() => {
+    // Priority 1: Supabase user metadata
+    if (user?.user_metadata?.full_name) {
+      setDisplayName(user.user_metadata.full_name);
+      return;
+    }
+
+    // Priority 2: Local storage
     const stored = typeof window !== "undefined" ? localStorage.getItem(NAME_STORAGE_KEY) : null;
-    if (stored) setDisplayName(stored);
+    if (stored) {
+      setDisplayName(stored);
+      return;
+    }
+
+    // Priority 3: Email snippet
+    if (user?.email) {
+      setDisplayName(user.email.split('@')[0]);
+    }
+  }, [user]);
+
+  useEffect(() => {
     const settings = typeof window !== "undefined" ? localStorage.getItem(SETTINGS_STORAGE_KEY) : null;
     if (settings) {
       try {
