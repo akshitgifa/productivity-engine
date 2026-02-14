@@ -48,16 +48,18 @@ Execution is divided into 5 testable phases. **USER MUST TEST AFTER EACH PHASE.*
 
 ---
 
-## Phase 2.6: Sync & Mutational Robustness ✅
-**Goal:** High-performance incremental sync and data safety.
+## Phase 2.6: Sync & Outbox Hardening ✅
+**Goal:** High-performance parallel sync and production-grade outbox robustness.
 
 ### Tasks
-- [x] **2.6.1 Logic:** Implement **Incremental Pull** (sync only updated records since `lastSync`).
-- [x] **2.6.2 UX:** Universal **Soft-Delete with Undo** support across all data types.
-- [x] **2.6.3 Hygiene:** Implement **Local Archival** (purge soft-deleted items older than 30 days).
-- [x] **2.6.4 Schema:** Repair all synced tables with `updated_at` columns and triggers.
+- [x] **2.6.1 Logic:** Implement **Parallel Metadata Pull** (parallelly verify `updated_at` before full pulls).
+- [x] **2.6.2 Logic:** Implement **Multi-Tab Mutex** using Web Locks API to prevent sync races.
+- [x] **2.6.3 Hybrid:** Implement **Outbox Robustness** (retry counts, batching limits, and validation failure handling).
+- [x] **2.6.4 UX:** Universal **Soft-Delete with Undo** support across all data types.
+- [x] **2.6.5 Hygiene:** Implement **Local Archival** (purge soft-deleted items older than 30 days).
+- [x] **2.6.6 Schema:** Repair all synced tables with `updated_at` columns, triggers, and Supabase B-tree indexes.
 
-**TESTED ✅:** Deletions are revocable for 5s. Sync is dramatically faster on large datasets.
+**TESTED ✅:** Deletions are revocable. Sync is near-instant on refresh. Multi-tab concurrency is safe.
  
 ---
  

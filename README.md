@@ -19,11 +19,12 @@ A subtle, global **Sync Indicator** provides real-time feedback:
 - **Initial Sync**: A progress bar tracks the loading of historical data from Supabase.
 - **Background Push**: A floating "Saving" indicator appears when the outbox is being processed.
 
-### Incremental Synchronization
-The sync engine uses **Incremental Pull** logic:
-- Only fetches records updated since the last sync.
-- Merges remote data using `updated_at` logic to prevent overwriting local work.
-- Significantly reduces data transfer after the initial sync.
+### High-Performance Synchronization
+The sync engine is optimized for speed and production-grade reliability:
+- **Parallel Metadata Checks**: Instead of blanket pulls, the app queries the latest cloud timestamp for each table in parallel. If no changes are detected, the full data pull is skipped.
+- **Concurrent Pulls**: Multiple tables are synchronized simultaneously using `Promise.all` to eliminate boot-time bottlenecks.
+- **Multi-Tab Mutex**: Leverages the Web Locks API to ensure only one tab synchronizes with Supabase at a time, preventing race conditions and redundant API calls.
+- **Failure-Aware Outbox**: Sync outbox includes a retry mechanism and batching to ensure transient failures don't block the data queue.
 
 ### Soft-Delete & Undo System
 Mutations follow a **Soft-Delete** pattern:
