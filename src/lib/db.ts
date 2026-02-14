@@ -82,10 +82,23 @@ export interface Subtask {
 }
 
 export interface ContextCard {
-  id: string;
-  user_id?: string;
-  project_id: string;
   content: string;
+  updated_at: string;
+}
+
+export interface ProjectCustomization {
+  projectId: string; // matches Project.id
+  gridX: number;
+  gridY: number;
+  gridW: number;
+  gridH: number;
+  sortOrder?: number;
+  theme?: 'light' | 'dark' | 'glass' | 'neo-brutal' | 'cyberpunk';
+  customStyles?: {
+    color?: string;
+    bgColor?: string;
+    fontFamily?: string;
+  };
   updated_at: string;
 }
 
@@ -98,6 +111,7 @@ export class EntropyDatabase extends Dexie {
   notes!: Table<Note>;
   subtasks!: Table<Subtask>;
   context_cards!: Table<ContextCard>;
+  project_customizations!: Table<ProjectCustomization>;
   sync_outbox!: Table<SyncOutbox>;
 
   constructor() {
@@ -134,6 +148,16 @@ export class EntropyDatabase extends Dexie {
       notes: 'id, user_id, project_id, task_id, sort_order, is_read, is_deleted',
       subtasks: 'id, user_id, task_id, is_deleted',
       context_cards: 'id, user_id, project_id, is_deleted',
+      sync_outbox: '++id, timestamp, retry_count'
+    });
+    this.version(12).stores({
+      projects: 'id, user_id, name, last_touched_at, is_deleted',
+      tasks: 'id, user_id, project_id, state, due_date, sort_order, is_deleted, planned_date',
+      activity_logs: 'id, user_id, task_id, project_id',
+      notes: 'id, user_id, project_id, task_id, sort_order, is_read, is_deleted',
+      subtasks: 'id, user_id, task_id, is_deleted',
+      context_cards: 'id, user_id, project_id, is_deleted',
+      project_customizations: 'projectId',
       sync_outbox: '++id, timestamp, retry_count'
     });
   }
@@ -239,6 +263,18 @@ export class EntropyDatabase extends Dexie {
     }
     
     return INBOX_ID;
+  }
+
+  async getProjectCustomization(projectId: string): Promise<ProjectCustomization | undefined> {
+    return await this.project_customizations.get(projectId);
+  }
+
+  async setProjectCustomization(customization: ProjectCustomization) {
+    await this.project_customizations.put(customization);
+  }
+
+  async getAllProjectCustomizations(): Promise<ProjectCustomization[]> {
+    return await this.project_customizations.toArray();
   }
 }
 

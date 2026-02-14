@@ -10,11 +10,12 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { sortTasksByUserOrder, mapTaskData, Task } from "@/lib/engine";
 import { taskService } from '@/lib/taskService';
+import { projectService } from '@/lib/projectService';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
-import { db } from "@/lib/db";
+import { db, ProjectCustomization } from "@/lib/db";
 import { toLocalISOString, isTodayLocal } from "@/lib/dateUtils";
 import { UserProfile } from "@/components/layout/UserProfile";
 import { ProjectSection } from "@/components/tasks/ProjectSection";
@@ -28,6 +29,7 @@ export default function Home() {
   const [undoToast, setUndoToast] = useState<{ id: string; title: string } | null>(null);
   const [viewMode, setViewMode] = useState<'Today' | 'Master'>('Today');
   const [displayedTasks, setDisplayedTasks] = useState<Task[]>([]);
+
 
   // Use local date string (YYYY-MM-DD) from utility
   const todayStr = toLocalISOString();
@@ -62,6 +64,21 @@ export default function Home() {
       return await db.getActiveProjects();
     }
   });
+
+  const { data: customizations = [] } = useQuery({
+    queryKey: ['project_customizations'],
+    queryFn: async () => {
+      return await db.getAllProjectCustomizations();
+    }
+  });
+
+  const customizationMap = useMemo(() => {
+    const map: Record<string, ProjectCustomization> = {};
+    customizations.forEach(c => {
+      map[c.projectId] = c;
+    });
+    return map;
+  }, [customizations]);
 
 
   // Load home filters from localStorage
@@ -202,6 +219,26 @@ export default function Home() {
     }
   }, [queryClient]);
 
+
+
+  const applyToAllMutation = useMutation({
+    mutationFn: async (customization: Partial<ProjectCustomization>) => {
+      await projectService.applyCustomizationToAll(customization);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project_customizations'] });
+    }
+  });
+
+  const applySizeToAllMutation = useMutation({
+    mutationFn: async ({ w, h }: { w: number, h: number }) => {
+      await projectService.applySizeToAll(w, h);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project_customizations'] });
+    }
+  });
+
   // Handle auto-refresh from sync events
   useEffect(() => {
     const handleSync = () => {
@@ -279,14 +316,26 @@ export default function Home() {
     // Based on engine.ts mapTaskData, task.projectTier is available.
     
     return Object.values(groups).sort((a, b) => {
+      const custA = customizationMap[a.id];
+      const custB = customizationMap[b.id];
+      
+      // Use sortOrder if available, otherwise fallback to tier then name
+      if (custA?.sortOrder && custB?.sortOrder) {
+        return custA.sortOrder - custB.sortOrder;
+      }
+      if (custA?.sortOrder) return -1;
+      if (custB?.sortOrder) return 1;
+
       const tierA = a.tasks[0]?.projectTier || 3;
       const tierB = b.tasks[0]?.projectTier || 3;
       if (tierA !== tierB) return tierA - tierB;
       return a.name.localeCompare(b.name);
     });
-  }, [memoizedDisplayTasks, viewMode]);
+  }, [memoizedDisplayTasks, viewMode, customizationMap]);
 
   const isLoading = isTasksLoading;
+
+
 
   useEffect(() => {
     setDisplayedTasks(sortTasksByUserOrder(memoizedDisplayTasks));
@@ -491,16 +540,36 @@ export default function Home() {
               ))}
             </Reorder.Group>
           ) : viewMode === 'Master' && groupedMasterTasks.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-10">
-              {groupedMasterTasks.map(group => (
-                <ProjectSection
-                  key={group.id}
-                  projectId={group.id}
-                  projectName={group.name}
-                  tasks={group.tasks}
-                  onTaskClick={(id) => setSelectedTaskId(id)}
-                />
-              ))}
+            <div className="flex flex-wrap gap-10">
+              {groupedMasterTasks.map(group => {
+                const cust = customizationMap[group.id];
+                const widthClass = {
+                  1: "w-full md:w-[calc(25%-30px)]",
+                  2: "w-full md:w-[calc(50%-20px)]",
+                }[cust?.gridW || 1] || "w-full md:w-[calc(25%-30px)]";
+
+                const heightClass = {
+                  1: "min-h-[200px]",
+                  2: "min-h-[420px]",
+                }[cust?.gridH || 1] || "min-h-[200px]";
+
+                return (
+                  <div 
+                    key={group.id}
+                    className={cn(widthClass, heightClass, "transition-all duration-300")}
+                  >
+                    <ProjectSection
+                      projectId={group.id}
+                      projectName={group.name}
+                      tasks={group.tasks}
+                      onTaskClick={(id) => setSelectedTaskId(id)}
+                      customization={cust}
+                      onApplyToAll={(c: Partial<ProjectCustomization>) => applyToAllMutation.mutate(c)}
+                      onApplySizeToAll={(w, h) => applySizeToAllMutation.mutate({ w, h })}
+                    />
+                  </div>
+                );
+              })}
             </div>
           ) : viewMode === 'Today' ? (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">

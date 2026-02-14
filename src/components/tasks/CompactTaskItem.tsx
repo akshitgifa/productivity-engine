@@ -10,6 +10,7 @@ interface CompactTaskItemProps {
   projectColor?: string;
   onClick?: (e: React.MouseEvent) => void;
   isCompleted?: boolean;
+  textColor?: string;
 }
 
 export function CompactTaskItem({
@@ -18,7 +19,8 @@ export function CompactTaskItem({
   dueDate,
   projectColor,
   onClick,
-  isCompleted = false
+  isCompleted = false,
+  textColor
 }: CompactTaskItemProps) {
   return (
     <motion.div
@@ -38,10 +40,13 @@ export function CompactTaskItem({
         />
         
         {/* Title */}
-        <span className={cn(
-          "text-sm font-medium truncate",
-          isCompleted ? "text-zinc-500 line-through" : "text-zinc-200 group-hover:text-white"
-        )}>
+        <span 
+          className={cn(
+            "text-sm font-medium truncate",
+            isCompleted ? "opacity-50 line-through" : ""
+          )}
+          style={{ color: !isCompleted ? textColor : undefined }}
+        >
           {title}
         </span>
       </div>
@@ -50,15 +55,16 @@ export function CompactTaskItem({
         {/* Due Date Indicator */}
         {dueDate && (() => {
           const { label, urgency } = formatTimeRemaining(dueDate);
+          const isOverdue = label.toLowerCase() === 'overdue';
           return (
             <div className={cn(
               "flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold border transition-all",
-              urgency === 'high' ? "bg-rose-500/10 border-rose-500/30 text-rose-500 animate-pulse" :
+              urgency === 'high' ? "bg-rose-500/10 border-rose-500/30 text-rose-500" :
               urgency === 'medium' ? "bg-amber-500/10 border-amber-500/30 text-amber-500" :
               "bg-zinc-500/10 border-border/30 text-zinc-500"
             )}>
-              <AlertCircle size={8} />
-              <span>{label}</span>
+              <AlertCircle size={10} className={cn(urgency === 'high' && "animate-pulse")} />
+              {!isOverdue && <span>{label}</span>}
             </div>
           );
         })()}
