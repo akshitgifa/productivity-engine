@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { ClientLayout } from "@/components/layout/ClientLayout";
+import { AuthProvider } from "@/providers/AuthProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -45,9 +46,11 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} font-inter antialiased bg-void text-foreground`}
       >
-        <ClientLayout>
-          {children}
-        </ClientLayout>
+        <AuthProvider>
+          <ClientLayout>
+            {children}
+          </ClientLayout>
+        </AuthProvider>
       </body>
     </html>
   );

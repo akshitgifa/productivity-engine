@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabaseServer';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 import { NextResponse } from 'next/server';
 
 export async function GET(
@@ -6,7 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
+    const supabase = createServerSupabaseClient();
     const { id: sessionId } = await params;
 
     if (!sessionId || sessionId === 'undefined' || sessionId === 'null') {

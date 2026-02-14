@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabaseServer';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 import { NextResponse } from 'next/server';
 // No external uuid import needed, using built-in crypto.randomUUID()
 
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    const supabase = await createClient();
+    const supabase = createServerSupabaseClient();
     const bucketName = 'voice-chat';
 
     const fileName = `${crypto.randomUUID()}.webm`;

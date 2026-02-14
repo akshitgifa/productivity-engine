@@ -1,6 +1,6 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText, stepCountIs, embed } from 'ai';
-import { createClient } from '@/lib/supabaseServer';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 import { getTools } from '@/lib/ai/tools';
 import { z } from 'zod';
 
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ error: "Messages array is required" }), { status: 400 });
   }
 
-  const supabase = await createClient();
+  const supabase = createServerSupabaseClient();
 
   // Transform UI messages (with parts) to CoreMessage format (with content)
   // This is needed because useChat sends {parts} but convertToModelMessages expects {content}

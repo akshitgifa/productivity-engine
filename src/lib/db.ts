@@ -72,6 +72,7 @@ export interface Note {
 
 export interface Subtask {
   id: string;
+  user_id?: string;
   task_id: string;
   title: string;
   is_completed: boolean;
@@ -82,6 +83,7 @@ export interface Subtask {
 
 export interface ContextCard {
   id: string;
+  user_id?: string;
   project_id: string;
   content: string;
   updated_at: string;
@@ -125,15 +127,34 @@ export class EntropyDatabase extends Dexie {
       context_cards: 'id, project_id, is_deleted',
       sync_outbox: '++id, timestamp'
     });
-    this.version(9).stores({
-      projects: 'id, name, last_touched_at, is_deleted',
-      tasks: 'id, project_id, state, due_date, sort_order, is_deleted, planned_date',
-      activity_logs: 'id, task_id, project_id',
-      notes: 'id, project_id, task_id, sort_order, is_read, is_deleted',
-      subtasks: 'id, task_id, is_deleted',
-      context_cards: 'id, project_id, is_deleted',
+    this.version(11).stores({
+      projects: 'id, user_id, name, last_touched_at, is_deleted',
+      tasks: 'id, user_id, project_id, state, due_date, sort_order, is_deleted, planned_date',
+      activity_logs: 'id, user_id, task_id, project_id',
+      notes: 'id, user_id, project_id, task_id, sort_order, is_read, is_deleted',
+      subtasks: 'id, user_id, task_id, is_deleted',
+      context_cards: 'id, user_id, project_id, is_deleted',
       sync_outbox: '++id, timestamp, retry_count'
     });
+  }
+
+  /**
+   * Clears all tables in the database. 
+   * Used during logout to ensure no local data remains.
+   */
+  async clearAllData() {
+    await Promise.all([
+      this.projects.clear(),
+      this.tasks.clear(),
+      this.activity_logs.clear(),
+      this.notes.clear(),
+      this.subtasks.clear(),
+      this.context_cards.clear(),
+      this.sync_outbox.clear()
+    ]);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('entropy_sync_timestamps');
+    }
   }
 
   // Helper to record an action in the outbox

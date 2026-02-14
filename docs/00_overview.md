@@ -37,6 +37,7 @@ The next evolution focus on three pillars:
 - **Package Manager:** Use `pnpm` exclusively. Never use `npm` or `yarn`.
 - **Primary Stack:** Next.js 15 (App Router), Dexie.js (Local Storage), Supabase (Cloud Sync + pgvector), Vercel AI SDK (Gemini-2.0-flash).
 - **Styling:** **Vanilla CSS only.** Avoid Tailwind CSS unless specifically requested. Maintain a "High-Performance Minimalism" aesthetic.
+- **Communication & UI:** **Use simple English only.** Avoid "buzzwords," overly thematic, or complex terminology (e.g., use "Reset Password" instead of "Forgot Strategy") unless the USER explicitly asks for a specific theme or aesthetic.
 
 ## Development Flow
 1. **Phase-based Execution:** Follow the implementation phases in [doc/02_phases.md](file:///Users/akshit2434/github/productivity-engine/docs/02_phases.md).

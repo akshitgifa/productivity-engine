@@ -78,6 +78,14 @@ async function _processOutboxBatched() {
   store.setPhase('pushing');
 
   const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    console.warn('[Sync] No user session found, skipping outbox processing');
+    store.setPhase('idle');
+    localSyncInProgress = false;
+    return;
+  }
 
   // Group items by table and action
   const groups = new Map<string, typeof outboxItems>();
@@ -92,7 +100,7 @@ async function _processOutboxBatched() {
   const keysToProcess = allGroupKeys.slice(0, OUTBOX_BATCH_GROUP_LIMIT);
   
   store.setPendingCount(keysToProcess.length);
-  console.log(`[Sync] Processing ${keysToProcess.length} outbox groups (${outboxItems.length} total items)...`);
+  // console.log(`[Sync] Processing ${keysToProcess.length} outbox groups (${outboxItems.length} total items)...`);
 
   for (const key of keysToProcess) {
     const items = groups.get(key)!;
@@ -109,12 +117,19 @@ async function _processOutboxBatched() {
         });
 
         const mergedById = new Map<string, Record<string, any>>();
+        const tablesWithUserId = new Set(['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards']);
+        
         for (const item of items) {
           const { id, ...fields } = item.data;
           const base = recordMap.get(id) || {};
           const existing = mergedById.get(id) || base;
           const sanitizedFields = sanitizeForSupabase(fields);
-          mergedById.set(id, { ...existing, ...sanitizedFields, id });
+          
+          const record: Record<string, any> = { ...existing, ...sanitizedFields, id };
+          if (tablesWithUserId.has(tableName)) {
+            record.user_id = user.id;
+          }
+          mergedById.set(id, record);
         }
         const rows = Array.from(mergedById.values());
         
@@ -134,7 +149,6 @@ async function _processOutboxBatched() {
         const ids = items.map((i: any) => i.id!).filter(Boolean);
         await db.sync_outbox.bulkDelete(ids);
         store.setPendingCount(Math.max(0, useSyncStore.getState().pendingCount - 1));
-        // console.log(`[Sync] ✓ ${tableName}:${action} (${items.length} items)`);
       } else {
         // Increment retry count for failed items
         const ids = items.map((i: any) => i.id!).filter(Boolean);
@@ -154,7 +168,6 @@ async function _processOutboxBatched() {
   store.setPendingCount(0);
   localSyncInProgress = false;
 
-  // If there are more items to process, trigger another batch after a short delay
   if (allGroupKeys.length > OUTBOX_BATCH_GROUP_LIMIT) {
     setTimeout(() => processOutbox(), 1000);
   }
@@ -199,15 +212,14 @@ async function syncTable(tableName: string, supabase: any, lastSync: string | nu
 
   if (metaError) {
     console.error(`[Sync] Metadata check failed for ${tableName}:`, metaError);
-    // Fallback: try regular sync if metadata check fails
   } else if (remoteMeta && remoteMeta[0]) {
     const remoteMax = remoteMeta[0].updated_at;
     if (lastSync && remoteMax <= lastSync) {
-      // console.log(`[Sync] ✓ ${tableName} is up-to-date (Cloud: ${remoteMax}, Local: ${lastSync})`);
       return;
     }
   }
 
+  // Pull records for the current user only
   let query = supabase.from(tableName).select('*');
   
   if (lastSync && INCREMENTAL_TABLES.has(tableName)) {
@@ -254,7 +266,7 @@ async function syncTable(tableName: string, supabase: any, lastSync: string | nu
 
   if (toPut.length > 0) {
     await (db as any)[tableName].bulkPut(toPut);
-    console.log(`[Sync] Pulled ${toPut.length} updates for ${tableName}`);
+    // console.log(`[Sync] Pulled ${toPut.length} updates for ${tableName}`);
   }
 
   if (maxUpdate) {
@@ -274,7 +286,11 @@ export function setupSubscriptions() {
     .channel('db-changes')
     .on('postgres_changes', { event: '*', schema: 'public' }, async (payload: any) => {
       const { table, eventType, new: newRow, old: oldRow } = payload;
-      // console.log(`[Sync] Real-time ${eventType} on ${table}`);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      if (newRow && newRow.user_id && newRow.user_id !== user.id) return;
+      if (oldRow && oldRow.user_id && oldRow.user_id !== user.id) return;
 
       if (eventType === 'INSERT' || eventType === 'UPDATE') {
         const localItem = await (db as any)[table].get(newRow.id);
@@ -286,7 +302,10 @@ export function setupSubscriptions() {
           updateStoredTimestamp(table, newRow.updated_at);
         }
       } else if (eventType === 'DELETE') {
-        await (db as any)[table].delete(oldRow.id);
+        const record = await (db as any)[table].get(oldRow.id);
+        if (record && record.user_id === user.id) {
+           await (db as any)[table].delete(oldRow.id);
+        }
       }
 
       window.dispatchEvent(new CustomEvent('entropy:sync-complete', { detail: { table, eventType } }));
@@ -298,21 +317,60 @@ export function setupSubscriptions() {
   };
 }
 
+/**
+ * Finds any local records with user_id: null and assigns the current user_id to them.
+ * This allows a user who was working in a "loggedIn but unassigned" state to keep their data.
+ */
+async function claimUnassignedData(userId: string) {
+  for (const table of SYNC_TABLES) {
+    try {
+      const unassigned = await (db as any)[table]
+        .filter((r: any) => !r.user_id)
+        .toArray();
+      
+      if (unassigned.length > 0) {
+        console.log(`[Sync] Claiming ${unassigned.length} unassigned records in ${table}...`);
+        const updates = unassigned.map((r: any) => ({ ...r, user_id: userId }));
+        await (db as any)[table].bulkPut(updates);
+        
+        // Record these changes in outbox so they sync to Supabase
+        for (const record of updates) {
+          await db.recordAction(table, 'update', record);
+        }
+      }
+    } catch (err) {
+      console.warn(`[Sync] Could not claim data for ${table}:`, err);
+    }
+  }
+}
+
 export async function initialSync() {
   if (!navigator.onLine) return;
 
   const store = useSyncStore.getState();
-  if (store.phase !== 'idle') return; // Prevent concurrent initial syncs
+  if (store.phase !== 'idle') return; 
 
   store.setPhase('syncing');
   store.setProgress(0);
 
   try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.warn('[Sync] No authenticated user, skipping initial sync');
+      store.setPhase('idle');
+      return;
+    }
+
+    // 1. Claim any local data created before login
+    await claimUnassignedData(user.id);
+
+    // 2. Ensure basic structures and process outbox
     await db.ensureInbox();
     await _processOutboxBatched();
 
     const timestamps = getStoredTimestamps();
-    const supabase = createClient();
 
     let completed = 0;
     const syncPromises = SYNC_TABLES.map(async (table) => {
@@ -322,7 +380,7 @@ export async function initialSync() {
     });
 
     await Promise.all(syncPromises);
-    console.log('[Sync] Synchronization complete.');
+    // console.log('[Sync] Synchronization complete.');
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('entropy:sync-complete'));
@@ -336,10 +394,6 @@ export async function initialSync() {
 
 // ─── Local Archival ────────────────────────────────────────────────────────
 
-/**
- * Purge soft-deleted records older than 30 days from local Dexie.
- * These records are still in Supabase cloud for safety.
- */
 export async function purgeLocalArchive() {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
@@ -349,7 +403,7 @@ export async function purgeLocalArchive() {
     try {
       const records = await (db as any)[table]
         .where('is_deleted')
-        .equals(1) // Dexie stores booleans as 0/1
+        .equals(1) 
         .toArray();
       
       const toDelete = records.filter((r: any) => 
@@ -358,10 +412,8 @@ export async function purgeLocalArchive() {
 
       if (toDelete.length > 0) {
         await (db as any)[table].bulkDelete(toDelete.map((r: any) => r.id));
-        console.log(`[Archive] Purged ${toDelete.length} old records from ${table}`);
       }
     } catch {
-      // Table might not have is_deleted column (e.g., activity_logs)
     }
   }
 }
@@ -370,15 +422,12 @@ export async function purgeLocalArchive() {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
-    console.log('[Sync] Back online, processing outbox...');
     processOutbox();
   });
 
-  // Periodic outbox processing (every 30 seconds)
   setInterval(() => {
     processOutbox();
   }, 30000);
 
-  // Daily local archive purge
   setTimeout(() => purgeLocalArchive(), 5000);
 }

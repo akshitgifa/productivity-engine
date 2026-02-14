@@ -1,9 +1,9 @@
-import { createClient } from '@/lib/supabaseServer';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 import { NextResponse } from 'next/server';
 
 export async function GET(req: Request) {
   try {
-    const supabase = await createClient();
+    const supabase = createServerSupabaseClient();
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('q');
 
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
+    const supabase = createServerSupabaseClient();
     const { title } = await req.json();
 
     const { data, error } = await supabase
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const supabase = await createClient();
+    const supabase = createServerSupabaseClient();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
 

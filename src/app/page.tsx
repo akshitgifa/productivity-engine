@@ -16,6 +16,7 @@ import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
 import { db } from "@/lib/db";
 import { toLocalISOString, isTodayLocal } from "@/lib/dateUtils";
+import { UserProfile } from "@/components/layout/UserProfile";
 
 export default function Home() {
   const { timeAvailable } = useUserStore();
@@ -289,14 +290,15 @@ export default function Home() {
               Today
             </h1>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-4 items-center">
             <Link
               href="/export"
-              className="h-10 px-4 md:h-16 md:px-8 rounded-2xl md:rounded-[2rem] bg-primary text-void flex items-center gap-3 card-shadow hover:opacity-90 transition-all font-black text-[10px] md:text-xs tracking-[0.2em]"
+              className="h-10 px-4 md:h-12 md:px-6 rounded-2xl md:rounded-2xl bg-surface/40 text-primary border border-primary/20 flex items-center gap-3 card-shadow hover:bg-primary/10 transition-all font-black text-[10px] md:text-[11px] tracking-[0.2em]"
             >
-              <Share2 size={18} strokeWidth={2.5} />
-              <span>EXPORT</span>
+              <Share2 size={16} strokeWidth={2.5} />
+              <span className="hidden md:inline">EXPORT</span>
             </Link>
+            <UserProfile />
           </div>
         </div>
 

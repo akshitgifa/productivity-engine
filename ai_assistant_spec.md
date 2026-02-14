@@ -3,6 +3,11 @@
 ## Overview
 The AI Assistant is an active intelligence partner with full read/write access to the Entropy database. It operates as a multimodal agent (text + voice) with persistent conversation history.
 
+### 3. Language & Tone
+- **Simple English:** Prioritize clarity, directness, and standard English.
+- **No Buzzwords:** Avoid "cool" but unnecessary terms (e.g., use "Reset Password" instead of "Forgot Strategy") unless the USER explicitly requests a themed interface.
+- **Concatenation:** Be concise. Don't over-explain technical jargon.
+
 ---
 
 ## Tool Registry

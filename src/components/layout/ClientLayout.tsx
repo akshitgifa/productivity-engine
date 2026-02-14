@@ -21,6 +21,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isChat = pathname === "/chat";
   const isExport = pathname?.startsWith("/export");
+  const isAuth = pathname?.startsWith("/login") || 
+                 pathname?.startsWith("/register") || 
+                 pathname?.startsWith("/forgot-password") || 
+                 pathname?.startsWith("/reset-password");
+  const hideChrome = isChat || isExport || isAuth;
 
   React.useEffect(() => {
     // PWA Service Worker Registration
@@ -35,23 +40,37 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     const cleanup = setupSubscriptions();
 
     // Perform initial bi-directional sync
-    initialSync().catch(err => console.error('[Sync] Initial sync error:', err));
+    if (!isAuth) {
+      initialSync().catch(err => console.error('[Sync] Initial sync error:', err));
+    }
 
     return () => {
       cleanup();
     };
-  }, []);
+  }, [isAuth]);
+
+  if (isAuth) {
+    return (
+      <QueryProvider>
+        <SplashScreen />
+        <ToastContainer />
+        <main className="min-h-screen">
+          {children}
+        </main>
+      </QueryProvider>
+    );
+  }
 
   return (
     <QueryProvider>
       <SplashScreen />
       <SyncIndicator />
       <ToastContainer />
-      <main className={cn("min-h-screen", !isChat && !isExport && "pb-24")}>
+      <main className={cn("min-h-screen", !hideChrome && "pb-24")}>
         {children}
       </main>
-      {!isChat && !isExport && <QuickCaptureFAB />}
-      {!isChat && !isExport && <Navigation />}
+      {!hideChrome && <QuickCaptureFAB />}
+      {!hideChrome && <Navigation />}
     </QueryProvider>
   );
 }

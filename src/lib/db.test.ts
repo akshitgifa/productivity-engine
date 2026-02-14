@@ -29,6 +29,11 @@ const mockFromMethods = {
 
 const mockSupabase = {
   from: vi.fn(() => mockFromMethods),
+  auth: {
+    getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'user-123' } }, error: null }),
+    getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'user-123' } } }, error: null }),
+    onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+  },
 };
 
 vi.mock('./supabase', () => ({
