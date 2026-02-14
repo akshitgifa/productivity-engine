@@ -5,7 +5,17 @@ import { createClient } from './supabase';
 
 // Mock Supabase stable methods
 const mockFromMethods = {
-  select: vi.fn().mockResolvedValue({ data: [], error: null }),
+  select: vi.fn(() => {
+    const chain: any = {
+      order: vi.fn(() => chain),
+      limit: vi.fn(() => chain),
+      gt: vi.fn(() => chain),
+      then: (resolve: any) => resolve({ data: mockFromMethods._data || [], error: null }),
+      catch: (reject: any) => reject(new Error('Mock Error')),
+    };
+    return chain;
+  }),
+  _data: [] as any[],
   insert: vi.fn().mockResolvedValue({ error: null }),
   update: vi.fn(() => ({
     eq: vi.fn().mockResolvedValue({ error: null }),
@@ -125,8 +135,8 @@ describe('Database and Sync Logic', () => {
 
   describe('initialSync', () => {
     it('should fetch data from Supabase and put into local DB', async () => {
-      const mockData = [{ id: 'p1', name: 'Project 1' }];
-      (mockSupabase.from as any)().select.mockResolvedValue({ data: mockData, error: null });
+      const mockData = [{ id: 'p1', name: 'Project 1', updated_at: new Date().toISOString() }];
+      mockFromMethods._data = mockData;
 
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,

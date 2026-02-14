@@ -129,14 +129,50 @@ async function _processOutboxBatched() {
 
 // ─── Incremental Sync (Merge Logic) ─────────────────────────────────────────
 
+type SyncTimestamps = Record<string, string>;
+const SYNC_TIMESTAMPS_KEY = 'entropy_sync_timestamps';
+
+function getStoredTimestamps(): SyncTimestamps {
+  if (typeof window === 'undefined') return {};
+  try {
+    return JSON.parse(localStorage.getItem(SYNC_TIMESTAMPS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function updateStoredTimestamp(tableName: string, timestamp: string) {
+  if (typeof window === 'undefined') return;
+  const timestamps = getStoredTimestamps();
+  timestamps[tableName] = timestamp;
+  localStorage.setItem(SYNC_TIMESTAMPS_KEY, JSON.stringify(timestamps));
+}
+
 /**
  * Fetches only records updated since `lastSync` and merges them into Dexie
- * using timestamp comparison. Falls back to full fetch on first sync.
+ * using timestamp comparison.
  */
 async function syncTable(tableName: string, supabase: any, lastSync: string | null) {
+  // Metadata check: get the latest updated_at in the cloud for this table
+  const { data: remoteMeta, error: metaError } = await supabase
+    .from(tableName)
+    .select('updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(1);
+
+  if (metaError) {
+    console.error(`[Sync] Metadata check failed for ${tableName}:`, metaError);
+    // Fallback: try regular sync if metadata check fails
+  } else if (remoteMeta && remoteMeta[0]) {
+    const remoteMax = remoteMeta[0].updated_at;
+    if (lastSync && remoteMax <= lastSync) {
+      // console.log(`[Sync] ✓ ${tableName} is up-to-date (Cloud: ${remoteMax}, Local: ${lastSync})`);
+      return;
+    }
+  }
+
   let query = supabase.from(tableName).select('*');
   
-  // Incremental: only fetch records updated since last sync (for tables that support it)
   if (lastSync && INCREMENTAL_TABLES.has(tableName)) {
     query = query.gt('updated_at', lastSync);
   }
@@ -158,15 +194,21 @@ async function syncTable(tableName: string, supabase: any, lastSync: string | nu
   });
 
   const toPut: any[] = [];
+  let maxUpdate: string | null = lastSync;
   
   for (const remoteItem of remoteData) {
     const localItem = localMap.get(remoteItem.id);
+    const remoteUpdateStr = (remoteItem as any).updated_at;
+    
+    if (remoteUpdateStr && (!maxUpdate || remoteUpdateStr > maxUpdate)) {
+      maxUpdate = remoteUpdateStr;
+    }
+
     if (!localItem) {
       toPut.push(remoteItem);
     } else {
-      const remoteUpdate = new Date((remoteItem as any).updated_at || 0).getTime();
+      const remoteUpdate = new Date(remoteUpdateStr || 0).getTime();
       const localUpdate = new Date((localItem as any).updated_at || 0).getTime();
-      
       if (remoteUpdate >= localUpdate) {
         toPut.push(remoteItem);
       }
@@ -176,6 +218,10 @@ async function syncTable(tableName: string, supabase: any, lastSync: string | nu
   if (toPut.length > 0) {
     await (db as any)[tableName].bulkPut(toPut);
     console.log(`[Sync] Pulled ${toPut.length} updates for ${tableName}`);
+  }
+
+  if (maxUpdate) {
+    updateStoredTimestamp(tableName, maxUpdate);
   }
 }
 
@@ -191,7 +237,7 @@ export function setupSubscriptions() {
     .channel('db-changes')
     .on('postgres_changes', { event: '*', schema: 'public' }, async (payload: any) => {
       const { table, eventType, new: newRow, old: oldRow } = payload;
-      console.log(`[Sync] Real-time ${eventType} on ${table}`);
+      // console.log(`[Sync] Real-time ${eventType} on ${table}`);
 
       if (eventType === 'INSERT' || eventType === 'UPDATE') {
         const localItem = await (db as any)[table].get(newRow.id);
@@ -200,12 +246,12 @@ export function setupSubscriptions() {
 
         if (!localItem || remoteUpdate >= localUpdate) {
           await (db as any)[table].put(newRow);
+          updateStoredTimestamp(table, newRow.updated_at);
         }
       } else if (eventType === 'DELETE') {
         await (db as any)[table].delete(oldRow.id);
       }
 
-      // Notify UI of change
       window.dispatchEvent(new CustomEvent('entropy:sync-complete', { detail: { table, eventType } }));
     })
     .subscribe();
@@ -219,34 +265,35 @@ export async function initialSync() {
   if (!navigator.onLine) return;
 
   const store = useSyncStore.getState();
+  if (store.phase !== 'idle') return; // Prevent concurrent initial syncs
+
   store.setPhase('syncing');
   store.setProgress(0);
 
-  // Ensure Inbox project exists locally
-  await db.ensureInbox();
+  try {
+    await db.ensureInbox();
+    await _processOutboxBatched();
 
-  // Push local changes BEFORE pulling remote ones
-  await _processOutboxBatched();
+    const timestamps = getStoredTimestamps();
+    const supabase = createClient();
 
-  const lastSync = localStorage.getItem(LAST_SYNC_KEY);
-  console.log(`[Sync] Pulling remote updates${lastSync ? ` since ${lastSync}` : ' (full sync)'}...`);
-  
-  const supabase = createClient();
+    let completed = 0;
+    const syncPromises = SYNC_TABLES.map(async (table) => {
+      await syncTable(table as string, supabase, timestamps[table] || null);
+      completed++;
+      store.setProgress(completed / SYNC_TABLES.length);
+    });
 
-  for (let i = 0; i < SYNC_TABLES.length; i++) {
-    await syncTable(SYNC_TABLES[i], supabase, lastSync);
-    store.setProgress((i + 1) / SYNC_TABLES.length);
-  }
+    await Promise.all(syncPromises);
+    console.log('[Sync] Synchronization complete.');
 
-  // Save timestamp for next incremental sync
-  localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
-
-  store.setPhase('idle');
-  console.log('[Sync] Synchronization complete.');
-
-  // Notify UI to refresh after initial pull
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('entropy:sync-complete'));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('entropy:sync-complete'));
+    }
+  } catch (err) {
+    console.error('[Sync] Initial sync failure:', err);
+  } finally {
+    store.setPhase('idle');
   }
 }
 
