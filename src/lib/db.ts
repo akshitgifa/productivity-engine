@@ -6,6 +6,7 @@ export interface SyncOutbox {
   action: 'insert' | 'update' | 'delete';
   data: any;
   timestamp: number;
+  retry_count: number;
 }
 
 export interface Project {
@@ -124,14 +125,14 @@ export class EntropyDatabase extends Dexie {
       context_cards: 'id, project_id, is_deleted',
       sync_outbox: '++id, timestamp'
     });
-    this.version(8).stores({
+    this.version(9).stores({
       projects: 'id, name, last_touched_at, is_deleted',
       tasks: 'id, project_id, state, due_date, sort_order, is_deleted, planned_date',
       activity_logs: 'id, task_id, project_id',
       notes: 'id, project_id, task_id, sort_order, is_read, is_deleted',
       subtasks: 'id, task_id, is_deleted',
       context_cards: 'id, project_id, is_deleted',
-      sync_outbox: '++id, timestamp'
+      sync_outbox: '++id, timestamp, retry_count'
     });
   }
 
@@ -141,7 +142,8 @@ export class EntropyDatabase extends Dexie {
       tableName,
       action,
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      retry_count: 0
     });
   }
 

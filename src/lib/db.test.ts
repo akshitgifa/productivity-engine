@@ -53,6 +53,9 @@ vi.mock('./db', () => {
       equals: vi.fn().mockReturnValue({
         first: vi.fn().mockResolvedValue(null),
       }),
+      below: vi.fn().mockReturnValue({
+        toArray: vi.fn().mockResolvedValue([]),
+      }),
     });
     
     table.orderBy = vi.fn().mockReturnValue({
@@ -121,10 +124,12 @@ describe('Database and Sync Logic', () => {
 
     it('should process items in the outbox when online', async () => {
       const mockOutboxItems = [
-        { id: 1, tableName: 'tasks', action: 'insert', data: { id: 't1', title: 'Task 1' }, timestamp: 100 },
+        { id: 1, tableName: 'tasks', action: 'insert', data: { id: 't1', title: 'Task 1' }, timestamp: 100, retry_count: 0 },
       ];
       
-      (db.sync_outbox.orderBy as any)().toArray.mockResolvedValue(mockOutboxItems);
+      (db.sync_outbox.where as any)().below.mockReturnValue({
+        toArray: vi.fn().mockResolvedValue(mockOutboxItems),
+      });
       
       await processOutbox();
 
@@ -137,6 +142,10 @@ describe('Database and Sync Logic', () => {
     it('should fetch data from Supabase and put into local DB', async () => {
       const mockData = [{ id: 'p1', name: 'Project 1', updated_at: new Date().toISOString() }];
       mockFromMethods._data = mockData;
+
+      (db.sync_outbox.where as any)().below.mockReturnValue({
+        toArray: vi.fn().mockResolvedValue([]),
+      });
 
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,

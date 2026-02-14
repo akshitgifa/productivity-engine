@@ -5,15 +5,17 @@ import { useSyncStore } from '@/store/syncStore';
 // ─── Constants ─────────────────────────────────────────────────────────────
 const SYNC_TABLES = ['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards'] as const;
 const LAST_SYNC_KEY = 'productivity_engine_last_sync';
+const MAX_OUTBOX_RETRIES = 5;
+const OUTBOX_BATCH_GROUP_LIMIT = 20;
 
 // Tables that have updated_at columns (used for incremental sync)
 const INCREMENTAL_TABLES = new Set(['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards']);
 // Tables that have is_deleted columns (used for archival purge)
 const SOFT_DELETE_TABLES = new Set(['projects', 'tasks', 'notes', 'subtasks', 'context_cards']);
 
-// ─── Debounce mechanism ────────────────────────────────────────────────────
+// ─── Debounce & Mutex ──────────────────────────────────────────────────────
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-let syncInProgress = false;
+let localSyncInProgress = false;
 
 export function processOutbox() {
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -21,11 +23,25 @@ export function processOutbox() {
   return new Promise<void>((resolve) => {
     debounceTimer = setTimeout(async () => {
       debounceTimer = null;
-      if (syncInProgress) { resolve(); return; }
-      try {
-        await _processOutboxBatched();
-      } catch (err) {
-        console.error('[Sync] processOutbox error:', err);
+      if (localSyncInProgress) { resolve(); return; }
+      
+      // Use Web Locks API to prevent multi-tab sync races
+      if (typeof navigator !== 'undefined' && navigator.locks) {
+        await navigator.locks.request('entropy_sync_lock', { ifAvailable: true }, async (lock) => {
+          if (!lock) return; // Another tab is syncing
+          try {
+            await _processOutboxBatched();
+          } catch (err) {
+            console.error('[Sync] processOutbox error:', err);
+          }
+        });
+      } else {
+        // Fallback for environments without Web Locks
+        try {
+          await _processOutboxBatched();
+        } catch (err) {
+          console.error('[Sync] processOutbox error:', err);
+        }
       }
       resolve();
     }, 300);
@@ -49,16 +65,21 @@ function sanitizeForSupabase(data: Record<string, any>): Record<string, any> {
 async function _processOutboxBatched() {
   if (!navigator.onLine) return;
 
-  const outboxItems = await db.sync_outbox.orderBy('timestamp').toArray();
-  if (outboxItems.length === 0) return;
+  // Filter out items that have failed too many times and sort by timestamp
+  const outboxItems = await db.sync_outbox
+    .where('retry_count')
+    .below(MAX_OUTBOX_RETRIES)
+    .toArray();
+    
+  outboxItems.sort((a, b) => a.timestamp - b.timestamp);
 
-  syncInProgress = true;
+  localSyncInProgress = true;
   const store = useSyncStore.getState();
   store.setPhase('pushing');
 
-  console.log(`[Sync] Batching ${outboxItems.length} outbox items...`);
   const supabase = createClient();
 
+  // Group items by table and action
   const groups = new Map<string, typeof outboxItems>();
   for (const item of outboxItems) {
     const key = `${item.tableName}:${item.action}`;
@@ -66,16 +87,21 @@ async function _processOutboxBatched() {
     groups.get(key)!.push(item);
   }
 
-  store.setPendingCount(groups.size);
+  // Limit processing to N groups per batch to keep it responsive
+  const allGroupKeys = Array.from(groups.keys());
+  const keysToProcess = allGroupKeys.slice(0, OUTBOX_BATCH_GROUP_LIMIT);
+  
+  store.setPendingCount(keysToProcess.length);
+  console.log(`[Sync] Processing ${keysToProcess.length} outbox groups (${outboxItems.length} total items)...`);
 
-  for (const [key, items] of groups) {
+  for (const key of keysToProcess) {
+    const items = groups.get(key)!;
     const [tableName, action] = key.split(':');
     try {
       let error;
 
       if (action === 'insert' || action === 'update') {
-        // Fetch full records from Dexie to satisfy NOT NULL constraints
-        const uniqueIds = Array.from(new Set(items.map(i => i.data.id)));
+        const uniqueIds = Array.from(new Set(items.map((i: any) => i.data.id)));
         const fullRecordsFromDb = await (db as any)[tableName].bulkGet(uniqueIds);
         const recordMap = new Map();
         fullRecordsFromDb.forEach((r: any) => {
@@ -96,21 +122,28 @@ async function _processOutboxBatched() {
         error = supabaseError;
 
         if (error) {
-          console.error(`[Sync] Supabase rejection for ${key}:`, error, { 
-            tableName, action, rowsAttempted: rows 
-          });
+          console.error(`[Sync] Supabase rejection for ${key}:`, error);
         }
       } else if (action === 'delete') {
-        const ids = items.map(i => i.data.id);
+        const ids = items.map((i: any) => i.data.id);
         const { error: supabaseError } = await supabase.from(tableName).delete().in('id', ids);
         error = supabaseError;
       }
 
       if (!error) {
-        const ids = items.map(i => i.id!).filter(Boolean);
+        const ids = items.map((i: any) => i.id!).filter(Boolean);
         await db.sync_outbox.bulkDelete(ids);
         store.setPendingCount(Math.max(0, useSyncStore.getState().pendingCount - 1));
-        console.log(`[Sync] ✓ ${tableName}:${action} (${items.length} items)`);
+        // console.log(`[Sync] ✓ ${tableName}:${action} (${items.length} items)`);
+      } else {
+        // Increment retry count for failed items
+        const ids = items.map((i: any) => i.id!).filter(Boolean);
+        for (const id of ids) {
+          const item = items.find((i: any) => i.id === id);
+          if (item) {
+            await db.sync_outbox.update(id, { retry_count: (item.retry_count || 0) + 1 });
+          }
+        }
       }
     } catch (err) {
       console.error(`[Sync] Critical error syncing ${key}:`, err);
@@ -119,9 +152,13 @@ async function _processOutboxBatched() {
 
   store.setPhase('idle');
   store.setPendingCount(0);
-  syncInProgress = false;
+  localSyncInProgress = false;
 
-  // Dispatch global event to notify UI to refresh
+  // If there are more items to process, trigger another batch after a short delay
+  if (allGroupKeys.length > OUTBOX_BATCH_GROUP_LIMIT) {
+    setTimeout(() => processOutbox(), 1000);
+  }
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('entropy:sync-complete'));
   }
