@@ -30,7 +30,7 @@ A subtle, global **Sync Indicator** provides real-time feedback:
 The sync engine is optimized for speed and production-grade reliability:
 - **Parallel Metadata Checks**: Instead of blanket pulls, the app queries the latest cloud timestamp for each table in parallel. If no changes are detected, the full data pull is skipped.
 - **Concurrent Pulls**: Multiple tables are synchronized simultaneously using `Promise.all` to eliminate boot-time bottlenecks.
-- **Multi-Tab Mutex**: Leverages the Web Locks API to ensure only one tab synchronizes with Supabase at a time, preventing race conditions and redundant API calls.
+- **Multi-Tab & Instance Mutex**: Leverages the Web Locks API and internal state guards (`initialSyncInProgress`) to ensure only one sync process runs at a time. This prevents `AbortError` race conditions during rapid refreshes or navigations.
 - **Failure-Aware Outbox**: Sync outbox includes a retry mechanism and batching to ensure transient failures don't block the data queue.
 
 ### Identity & Profiles
@@ -68,14 +68,14 @@ Setting a deadline resets `sort_order` to 0 (enters deadline pool). Dragging ass
 - **Dashboard**: Curated execution queue sorted by urgency and deadlines
 - **Portfolio**: Per-project task management with health tracking, KPIs, and context cards
 - **AI Assistant**: Multimodal chat (text + voice) with tool access to the full database
-- **Quick Capture**: Voice → transcription → structured task creation in one flow
+- **Quick Capture**: Voice → transcription → structured task creation via a unified mobile drawer.
 - **Notes**: Standalone AI-enhanced knowledge base with markdown editing
 - **Export**: Screenshot-ready progress reports with privacy controls and automatic profile name integration
 - **Profile & Settings**: Centralized account management and engine preference control
 - **Smart Recurrence**: Completed recurring tasks auto-spawn with `waiting_until` dates
-- **Master List**: Unified view of all fragments in the system
-- **Creative Customization**: Real-time theme editing with live preview and layout controls
-- **Mobile Performance**: Gesture-driven interactions (long-press) and skeleton-loading project pages
+- **Master List**: Unified view of all fragments in the system with **viewMode persistence** (localStorage).
+- **Creative Customization**: Real-time theme editing with live preview and **Unified DraggableDrawer** styling.
+- **Mobile Performance**: **Velocity-sensitive DraggableDrawer** with projection-based snapping and portal-based layering (z-10000).
 
 ---
 
@@ -103,4 +103,5 @@ pnpm dev
 ---
 
 ## Deployment
-Optimized for Vercel. Supports PWA installation for native-like mobile experience.
+- **Platform**: Optimized for Vercel. 
+- **PWA**: Supports PWA installation. Note: **Service Workers are disabled in development mode** to prevent CSS/layout corruption caused by Turbopack chunk rotation.

@@ -26,6 +26,9 @@
 - [x] **Today View**: Intentional daily agenda with manual commitment
 - [x] **Proactive Agenda**: Top Picks suggestions for empty Today states
 - [x] **Mobile Action Bubbles**: Creative hold-and-drag interaction for task management
+- [x] **Unified DraggableDrawer**: Stable, velocity-sensitive mobile sheet with portal-based layering
+- [x] **initialSync Mutex**: Prevents `AbortError` race conditions during navigation
+- [x] **viewMode Persistence**: Home page remembers Today vs Master List view
 - [x] **Real-time UI Refresh**: Auto-update on sync completion via global event bridge
 
 ## Pending

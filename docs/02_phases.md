@@ -118,6 +118,20 @@ Execution is divided into 5 testable phases. **USER MUST TEST AFTER EACH PHASE.*
 
 ---
 
+## Phase 2.11: UI & Sync Stabilization ✅
+**Goal:** Unified gesture primitives and race-condition free synchronization.
+
+### Tasks
+- [x] **2.11.1 UI:** Build unified `DraggableDrawer` with **Projection-Based Snapping** (velocity-aware).
+- [x] **2.11.2 UI:** Port `QuickCapture` and `ProjectSettings` to the new stable drawer primitive.
+- [x] **2.11.3 UI:** Implement portal-based layering with high z-index (10000) for global coverage.
+- [x] **2.11.4 Sync:** Implement **Instance Mutex** (`initialSyncInProgress`) to eliminate `AbortError` race conditions.
+- [x] **2.11.5 Hydration:** Added **Hydration Guards** and `viewMode` persistence to ensure visual stability.
+
+**TESTED ✅:** Drawer gestures feel native. Rapid refreshes are stable. Master List view persists.
+
+---
+
 ## Phase 3: Background Intelligence (The Subconscious)
 **Goal:** Subagents and web research.
 

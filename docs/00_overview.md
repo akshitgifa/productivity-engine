@@ -18,11 +18,11 @@
 - **AI Assistant (Chat):** A "God Mode" Assistant capable of managing tasks and projects via tool calls.
 - **Notes:** AI-enhanced knowledge base for unstructured thoughts.
 - **Quick Capture:** Rapid mobile-first entry for tasks via text or voice.
-- **High-Performance Sync:** Parallelized pulls with metadata-driven validation (skips unchanged tables) and multi-tab mutex handles concurrency.
+- **High-Performance Sync:** Parallelized pulls with metadata-driven validation (skips unchanged tables), multi-tab mutex, and **internal instance mutex** (`initialSyncInProgress`) to handle rapid navigation concurrency.
 - **Identity & Profiles:** Secure authentication, multi-user isolation, and customizable profile settings.
 - **Soft-Delete with Undo:** 5-second safety window for deleted items.
 - **Creative Customization:** High-fidelity project card personalization with "Live Preview" and real-time feedback.
-- **Mobile Refinements:** Haptic long-press gestures and optimistic skeleton loading.
+- **Mobile Refinements:** **Unified DraggableDrawer** with velocity-sensitive snapping, native pointer event control, and portal-based z-index (10000) layering.
 
 ### v2.0 Vision: The Second Brain
 The next evolution focus on three pillars:
@@ -52,7 +52,7 @@ The next evolution focus on three pillars:
 
 ## Code Integrity
 - **Local-First Pattern:** All data operations MUST prioritize the local Dexie database for zero-latency performance.
-- **High-Performance Synchronization:** The `sync.ts` engine uses metadata-driven parallel pulls and a tab-mutex to maintain consistency with minimal overhead and zero race conditions.
+- **High-Performance Synchronization:** The `sync.ts` engine uses metadata-driven parallel pulls, a tab-mutex (Web Locks API), and a **local mutex guard** to maintain consistency with minimal overhead and zero race conditions (`AbortError`).
 - **Mutations:** Use the "Dexie + Outbox" pattern for all writes. Deletions are "soft" using `is_deleted` to enable undo functionality.
 - **Local Archival:** To keep IndexedDB slim, soft-deleted records are automatically purged locally after 30 days.
 - **Engine Logic:** `src/lib/engine.ts` is the single source of truth for urgency math.

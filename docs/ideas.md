@@ -18,5 +18,4 @@ This document tracks future concepts, feature ideas, and architectural improveme
 - **Why:** Reduces cognitive load for secondary research tasks.
 
 ## Technical Debt / Refinements
-- **Centralized Mutation Layer:** Move all writes into a more robust service layer that handles optimistic updates and error recovery more uniformly.
 - **Web Worker Sync:** Move the Dexie sync process into a dedicated Web Worker to ensure the UI thread remains completely free during large data pulls.
