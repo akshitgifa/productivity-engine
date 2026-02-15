@@ -20,6 +20,8 @@ import { toLocalISOString, isTodayLocal } from "@/lib/dateUtils";
 import { UserProfile } from "@/components/layout/UserProfile";
 import { ProjectSection } from "@/components/tasks/ProjectSection";
 
+const EMPTY_ARRAY: any[] = [];
+
 export default function Home() {
   const { timeAvailable } = useUserStore();
   const { completeTask } = useTaskFulfillment();
@@ -28,14 +30,33 @@ export default function Home() {
   const [projectFilters, setProjectFilters] = useState<string[]>([]);
   const [undoToast, setUndoToast] = useState<{ id: string; title: string } | null>(null);
   const [viewMode, setViewMode] = useState<'Today' | 'Master'>('Today');
+
+  // Load viewMode from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('home_view_mode');
+    if (saved === 'Today' || saved === 'Master') {
+      setViewMode(saved);
+    }
+  }, []);
+
+  // Save viewMode to localStorage when it changes
+  const handleViewModeChange = (mode: 'Today' | 'Master') => {
+    setViewMode(mode);
+    localStorage.setItem('home_view_mode', mode);
+  };
   const [displayedTasks, setDisplayedTasks] = useState<Task[]>([]);
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
 
   // Use local date string (YYYY-MM-DD) from utility
   const todayStr = toLocalISOString();
 
   // 1. Fetch Active Tasks Query from Local DB
-  const { data: allActive = [], isLoading: isTasksLoading } = useQuery({
+  const { data: allActiveData, isLoading: isTasksLoading } = useQuery({
     queryKey: ['tasks', 'today'],
     queryFn: async () => {
       // Fetch active tasks from centralized helper
@@ -57,20 +78,23 @@ export default function Home() {
     },
     staleTime: 1000 * 60 * 5,
   });
+  const allActive = allActiveData || EMPTY_ARRAY;
 
-  const { data: projects = [] } = useQuery({
+  const { data: projectsData } = useQuery({
     queryKey: ['projects', 'all'],
     queryFn: async () => {
       return await db.getActiveProjects();
     }
   });
+  const projects = projectsData || EMPTY_ARRAY;
 
-  const { data: customizations = [] } = useQuery({
+  const { data: customizationsData } = useQuery({
     queryKey: ['project_customizations'],
     queryFn: async () => {
       return await db.getAllProjectCustomizations();
     }
   });
+  const customizations = customizationsData || EMPTY_ARRAY;
 
   const customizationMap = useMemo(() => {
     const map: Record<string, ProjectCustomization> = {};
@@ -92,7 +116,7 @@ export default function Home() {
   const selectedTask = allActive.find(t => t.id === selectedTaskId);
 
   // 2. Fetch Recently Completed Tasks Query from Local DB
-  const { data: completedToday = [] } = useQuery({
+  const { data: completedTodayData } = useQuery({
     queryKey: ['history', 'recent'],
     queryFn: async () => {
       const tasks = await db.getActiveTasks({ state: 'Done' });
@@ -104,6 +128,8 @@ export default function Home() {
       }));
     }
   });
+
+  const completedToday = completedTodayData || EMPTY_ARRAY;
 
   // 3. Complete Task Mutation
   const completeMutation = useMutation({
@@ -389,7 +415,7 @@ export default function Home() {
         {/* View Selection Toggle */}
         <div className="flex bg-surface/40 backdrop-blur-md border border-border/20 p-1.5 rounded-3xl w-full max-w-[320px] mb-8">
           <button
-            onClick={() => setViewMode('Today')}
+            onClick={() => handleViewModeChange('Today')}
             className={cn(
               "flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all",
               viewMode === 'Today' ? "bg-primary text-void shadow-lg" : "text-zinc-500 hover:text-zinc-300"
@@ -398,7 +424,7 @@ export default function Home() {
             Today
           </button>
           <button
-            onClick={() => setViewMode('Master')}
+            onClick={() => handleViewModeChange('Master')}
             className={cn(
               "flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all",
               viewMode === 'Master' ? "bg-primary text-void shadow-lg" : "text-zinc-500 hover:text-zinc-300"
@@ -539,7 +565,7 @@ export default function Home() {
                 </ReorderableItem>
               ))}
             </Reorder.Group>
-          ) : viewMode === 'Master' && groupedMasterTasks.length > 0 ? (
+          ) : viewMode === 'Master' && hasMounted && groupedMasterTasks.length > 0 ? (
             <div className="flex flex-wrap gap-10">
               {groupedMasterTasks.map(group => {
                 const cust = customizationMap[group.id];
@@ -582,7 +608,7 @@ export default function Home() {
                   The engine is ready. Pick your focus for a productive day.
                 </p>
                 <button 
-                  onClick={() => setViewMode('Master')}
+                  onClick={() => handleViewModeChange('Master')}
                   className="px-8 py-4 bg-primary text-void rounded-[2rem] font-black text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all"
                 >
                   PLAN YOUR DAY

@@ -29,8 +29,8 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const hideChrome = isChat || isExport || isAuth || isProfileOrSettings;
 
   React.useEffect(() => {
-    // PWA Service Worker Registration
-    if ('serviceWorker' in navigator) {
+    // PWA Service Worker Registration - Production Only
+    if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => console.log('[PWA] Service Worker registered:', reg.scope))

@@ -16,6 +16,7 @@ const SOFT_DELETE_TABLES = new Set(['projects', 'tasks', 'notes', 'subtasks', 'c
 // ─── Debounce & Mutex ──────────────────────────────────────────────────────
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let localSyncInProgress = false;
+let initialSyncInProgress = false;
 
 export function processOutbox() {
   if (debounceTimer) clearTimeout(debounceTimer);
@@ -348,8 +349,12 @@ export async function initialSync() {
   if (!navigator.onLine) return;
 
   const store = useSyncStore.getState();
-  if (store.phase !== 'idle') return; 
+  if (store.phase !== 'idle' || initialSyncInProgress) {
+    // console.log('[Sync] Sync already in progress, skipping...');
+    return; 
+  }
 
+  initialSyncInProgress = true;
   store.setPhase('syncing');
   store.setProgress(0);
 
@@ -385,10 +390,9 @@ export async function initialSync() {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('entropy:sync-complete'));
     }
-  } catch (err) {
-    console.error('[Sync] Initial sync failure:', err);
   } finally {
     store.setPhase('idle');
+    initialSyncInProgress = false;
   }
 }
 

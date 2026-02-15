@@ -34,14 +34,12 @@ export function QuickCaptureFAB() {
         </button>
       </div>
       
-      {isDrawerOpen && (
-        <QuickCaptureDrawer 
-          isOpen={isDrawerOpen} 
-          onClose={() => setIsDrawerOpen(false)} 
-          initialCaptureMode={initialCaptureMode}
-          initialProjectId={initialProjectId}
-        />
-      )}
+      <QuickCaptureDrawer 
+        isOpen={isDrawerOpen} 
+        onClose={() => setIsDrawerOpen(false)} 
+        initialCaptureMode={initialCaptureMode}
+        initialProjectId={initialProjectId}
+      />
     </>
   );
 }

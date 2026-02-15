@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence, useDragControls, PanInfo, useAnimation } from "framer-motion";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence, useMotionValue, animate } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface DraggableDrawerProps {
@@ -11,7 +12,7 @@ interface DraggableDrawerProps {
   title?: React.ReactNode;
   headerAction?: React.ReactNode;
   className?: string;
-  peekHeight?: string; 
+  peekHeight?: string;
   expandedHeight?: string;
 }
 
@@ -26,115 +27,203 @@ export function DraggableDrawer({
   expandedHeight = "95vh",
 }: DraggableDrawerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const controls = useAnimation();
-  const dragControls = useDragControls();
+  const [mounted, setMounted] = useState(false);
+  const y = useMotionValue(typeof window !== "undefined" ? window.innerHeight : 1000);
 
-  // Snapping points as percentages of 100vh
-  // peek: (1 - 0.60) * 100 = 40vh from top
-  // expanded: (1 - 0.95) * 100 = 5vh from top
-
-  const snapTo = useCallback((state: "peek" | "expanded" | "closed") => {
-    if (state === "closed") {
-      controls.start("closed").then(() => {
-        onClose();
-      });
-    } else {
-      controls.start(state);
-      setIsExpanded(state === "expanded");
-    }
-  }, [controls, onClose]);
+  // Native pointer drag state (refs to avoid re-renders during drag)
+  const isDragging = useRef(false);
+  const pointerStartClientY = useRef(0);
+  const yAtDragStart = useRef(0);
+  const lastPointerY = useRef(0);
+  const lastPointerTime = useRef(0);
+  const velocityY = useRef(0);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const vhToPixels = useCallback((val: string) => {
+    if (typeof window === "undefined") return 0;
+    return (parseFloat(val) / 100) * window.innerHeight;
+  }, []);
+
+  const getSnapY = useCallback(
+    (target: "peek" | "expanded" | "closed") => {
+      if (typeof window === "undefined") return 1000;
+      const h = window.innerHeight;
+      if (target === "peek") return h - vhToPixels(peekHeight);
+      if (target === "expanded") return h - vhToPixels(expandedHeight);
+      return h; // closed
+    },
+    [peekHeight, expandedHeight, vhToPixels]
+  );
+
+  const snapTo = useCallback(
+    (target: "peek" | "expanded" | "closed") => {
+      const targetY = getSnapY(target);
+      setIsExpanded(target === "expanded");
+
+      animate(y, targetY, {
+        type: "spring",
+        damping: 30,
+        stiffness: 300,
+        mass: 0.8,
+        onComplete: () => {
+          if (target === "closed") onClose();
+        },
+      });
+    },
+    [getSnapY, y, onClose]
+  );
+
+  // Open/close sync
+  useEffect(() => {
     if (isOpen) {
-      snapTo("peek");
+      y.set(typeof window !== "undefined" ? window.innerHeight : 1000);
+      requestAnimationFrame(() => snapTo("peek"));
     } else {
-      controls.set("closed");
       setIsExpanded(false);
+      y.set(typeof window !== "undefined" ? window.innerHeight : 1000);
     }
-  }, [isOpen, snapTo, controls]);
+  }, [isOpen]);
 
-  const handleDragEnd = (_: any, info: PanInfo) => {
-    const { offset, velocity } = info;
-    
-    // Close threshold
-    // If dragging down from peek OR dragging down significantly from expanded
-    if (offset.y > 150 || velocity.y > 500) {
-      if (isExpanded && offset.y < 300 && velocity.y < 800) {
-        // Just shrink to peek if was expanded and drag wasn't massive
-        snapTo("peek");
-      } else {
-        snapTo("closed");
+  // ── Native Pointer Handlers (on drag handle + header only) ──────────
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      isDragging.current = true;
+      y.stop(); // Kill any ongoing snap animation
+      pointerStartClientY.current = e.clientY;
+      yAtDragStart.current = y.get();
+      lastPointerY.current = e.clientY;
+      lastPointerTime.current = Date.now();
+      velocityY.current = 0;
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [y]
+  );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isDragging.current) return;
+
+      // Calculate velocity
+      const now = Date.now();
+      const dt = (now - lastPointerTime.current) / 1000;
+      if (dt > 0.005) {
+        velocityY.current = (e.clientY - lastPointerY.current) / dt;
+        lastPointerTime.current = now;
+        lastPointerY.current = e.clientY;
       }
-    } 
-    // Expand threshold
-    else if (offset.y < -100 || velocity.y < -500) {
-      snapTo("expanded");
-    }
-    // Snap back or toggle between states
-    else {
-      snapTo(isExpanded ? "expanded" : "peek");
-    }
-  };
 
-  const drawerVariants = {
-    closed: { y: "100%" },
-    peek: { y: `calc(100vh - ${peekHeight})` },
-    expanded: { y: `calc(100vh - ${expandedHeight})` }
-  };
+      const delta = e.clientY - pointerStartClientY.current;
+      const newY = yAtDragStart.current + delta;
+      const minY = getSnapY("expanded") - 20;
+      y.set(Math.max(newY, minY));
+    },
+    [y, getSnapY]
+  );
 
-  return (
-    <AnimatePresence mode="wait">
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+
+      const currentY = y.get();
+      const vel = velocityY.current;
+
+      // Where would the drawer be in ~150ms at current velocity?
+      const projectedY = currentY + vel * 0.15;
+
+      const peekY = getSnapY("peek");
+      const expandedY = getSnapY("expanded");
+      const closedY = getSnapY("closed");
+
+      // Find closest snap point to projected position
+      const points = [
+        { name: "expanded" as const, pos: expandedY },
+        { name: "peek" as const, pos: peekY },
+        { name: "closed" as const, pos: closedY },
+      ];
+
+      const closest = points.reduce((prev, curr) =>
+        Math.abs(projectedY - prev.pos) < Math.abs(projectedY - curr.pos)
+          ? prev
+          : curr
+      );
+
+      // Override: strong downward flick from peek → close
+      if (currentY > peekY + 40 && vel > 300) {
+        snapTo("closed");
+        return;
+      }
+
+      // Override: strong downward flick from expanded → peek
+      if (isExpanded && currentY > expandedY + 40 && vel > 300) {
+        snapTo("peek");
+        return;
+      }
+
+      snapTo(closest.name);
+    },
+    [y, getSnapY, isExpanded, snapTo]
+  );
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <AnimatePresence>
       {isOpen && (
         <>
           {/* Backdrop */}
           <motion.div
-            key="backdrop"
+            key="drawer-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm"
             onClick={() => snapTo("closed")}
           />
-          
-          {/* Mobile Drawer */}
+
+          {/* ── Mobile Drawer ── */}
           <motion.div
             key="mobile-drawer"
+            style={{ y }}
             className={cn(
-              "fixed inset-x-0 bottom-0 z-[102] bg-zinc-900 border-t border-white/10 shadow-2xl flex flex-col rounded-t-[2.5rem] md:hidden h-screen",
+              "fixed inset-x-0 top-0 z-[10000] bg-zinc-900 border-t border-white/10 shadow-2xl flex flex-col rounded-t-[2.5rem] md:hidden h-[100vh]",
               className
             )}
-            variants={drawerVariants}
-            initial="closed"
-            animate={controls}
-            exit="closed"
-            transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
-            drag="y"
-            dragControls={dragControls}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.05}
-            onDragEnd={handleDragEnd}
             onClick={(e) => e.stopPropagation()}
-            style={{ touchAction: "none" }}
           >
-            {/* Handle area */}
-            <div 
-              className="pt-4 pb-2 shrink-0 cursor-grab active:cursor-grabbing flex flex-col items-center"
-              onPointerDown={(e) => dragControls.start(e)}
+            {/* ── Drag Zone: handle + header ── */}
+            <div
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              style={{ touchAction: "none" }}
+              className="shrink-0 select-none"
             >
-              <div className="w-12 h-1.5 bg-zinc-800 rounded-full" />
+              {/* Drag handle pill */}
+              <div className="pt-4 pb-2 flex flex-col items-center cursor-grab active:cursor-grabbing">
+                <div className="w-12 h-1.5 bg-zinc-700 rounded-full" />
+              </div>
+
+              {/* Header */}
+              {(title || headerAction) && (
+                <div className="flex justify-between items-center px-6 py-2">
+                  {title && <div className="flex-1 overflow-hidden">{title}</div>}
+                  {headerAction && <div className="shrink-0">{headerAction}</div>}
+                </div>
+              )}
             </div>
 
-            <div className="flex justify-between items-center px-6 py-2 shrink-0">
-              {title && <div className="flex-1">{title}</div>}
-              {headerAction && <div className="shrink-0">{headerAction}</div>}
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-6 pb-12 custom-scrollbar">
+            {/* ── Scrollable Content ── */}
+            <div className="flex-1 overflow-y-auto px-6 pb-24 custom-scrollbar overscroll-contain">
               {children}
             </div>
           </motion.div>
 
-          {/* Desktop Modal version */}
+          {/* ── Desktop Modal ── */}
           <motion.div
             key="desktop-modal"
             initial={{ opacity: 0, scale: 0.95, x: "-50%", y: "-45%" }}
@@ -142,7 +231,7 @@ export function DraggableDrawer({
             exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-45%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
             className={cn(
-              "fixed top-1/2 left-1/2 z-[102] bg-zinc-900 border border-white/10 shadow-2xl hidden md:flex flex-col w-[420px] rounded-[2.5rem] max-h-[85vh] overflow-hidden",
+              "fixed top-1/2 left-1/2 z-[10000] bg-zinc-900 border border-white/10 shadow-2xl hidden md:flex flex-col w-[420px] rounded-[2.5rem] max-h-[85vh] overflow-hidden",
               className
             )}
             onClick={(e) => e.stopPropagation()}
@@ -157,6 +246,7 @@ export function DraggableDrawer({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import { CompactTaskItem } from "./CompactTaskItem";
 import { Task } from "@/lib/engine";
@@ -42,12 +44,12 @@ export function ProjectSection({
   const displayedTasks = isExpanded ? tasks : tasks.slice(0, displayLimit);
   const remainingCount = tasks.length - displayLimit;
   
-  // Sync local styles when customization changes (but not while editing if we want snappy feel)
+  // Sync local styles when customization changes
   useEffect(() => {
     if (!isSettingsOpen) {
       setLocalStyles(customization?.customStyles || {});
     }
-  }, [customization?.customStyles, isSettingsOpen]);
+  }, [customization, isSettingsOpen]);
 
   // Long Press Logic for Mobile Customization
   const handleTouchStart = () => {
@@ -97,7 +99,7 @@ export function ProjectSection({
     'neo-brutal': "bg-[#ff70ff] border-4 border-black shadow-[8px_8px_0_0_#000] text-black",
     dark: "bg-zinc-900 border-zinc-700 text-white",
     light: "bg-zinc-50 border-zinc-300 text-zinc-900 border-2 shadow-sm",
-    cyberpunk: "bg-black border-yellow-400 text-yellow-400 border-2 shadow-[0_0_20px_#facc15/30]",
+    cyberpunk: "bg-black border-yellow-400 text-yellow-400 border-2 shadow-[0_0_20px_rgba(250,204,21,0.3)]",
   }[customization?.theme || 'glass'] || "bg-surface/20 border-border/10";
 
   const fontClass = {
