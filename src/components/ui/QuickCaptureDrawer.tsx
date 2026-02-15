@@ -11,6 +11,8 @@ import { useOnlineStatus } from "@/hooks/use-online-status";
 import { db } from "@/lib/db";
 import { processOutbox } from "@/lib/sync";
 import { useToastStore } from "@/store/toastStore";
+import { toLocalISOString } from "@/lib/dateUtils";
+import { format, addDays } from "date-fns";
 import { ProjectSelector } from "./ProjectSelector";
 import { CustomDateTimePicker } from "./CustomDateTimePicker";
 import { DraggableDrawer } from "./DraggableDrawer";
@@ -59,6 +61,7 @@ export function QuickCaptureDrawer({
     duration: "30m",
     energy: "Normal",
     dueDate: "",
+    plannedDate: toLocalISOString(), // Default to today
     recurrence: "",
     recurrenceType: "completion"
   });
@@ -127,6 +130,7 @@ export function QuickCaptureDrawer({
         recurrence_interval_days: result.recurrence || null,
         recurrence_type: result.recurrenceType || 'completion',
         due_date: result.dueDate || null,
+        planned_date: result.plannedDate || null,
         sort_order: 0,
         state: 'Active' as const,
         last_touched_at: new Date().toISOString(),
@@ -161,6 +165,7 @@ export function QuickCaptureDrawer({
       duration: "30m",
       energy: "Normal",
       dueDate: "",
+      plannedDate: toLocalISOString(),
       recurrence: "",
       recurrenceType: "completion"
     });
@@ -227,10 +232,11 @@ export function QuickCaptureDrawer({
         title: data.task,
         description: data.description || "",
         projectId: matchingProject?.id || "NONE",
-        projectName: matchingProject?.name || data.project || "",
+        projectName: matchingProject?.id === "NONE" ? "Inbox" : (matchingProject?.name || data.project || ""),
         duration: data.duration || "30m",
         energy: data.energy || "Normal",
         dueDate: data.dueDate ? new Date(new Date(data.dueDate).getTime() - new Date(data.dueDate).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
+        plannedDate: data.plannedDate || toLocalISOString(),
         recurrence: data.recurrence || "",
         recurrenceType: data.recurrenceType || "completion"
       });
@@ -282,6 +288,7 @@ export function QuickCaptureDrawer({
       energy: manualData.energy,
       projectId: manualData.projectId === "NONE" ? undefined : manualData.projectId,
       dueDate: manualData.dueDate || undefined,
+      plannedDate: manualData.plannedDate || undefined,
       recurrence: manualData.recurrence === "" ? null : parseInt(manualData.recurrence),
       recurrenceType: manualData.recurrenceType
     });
@@ -426,7 +433,7 @@ export function QuickCaptureDrawer({
                   </select>
                 </div>
                 <div className="flex items-end">
-                  <button
+                   <button
                     type="button"
                     onClick={() => setIsFormExpanded((prev) => !prev)}
                     className={cn(
@@ -439,8 +446,61 @@ export function QuickCaptureDrawer({
                 </div>
               </div>
 
+              {/* Commitment Selector Row (Visible by default) */}
+              <div className="space-y-1.5 overflow-visible">
+                <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Plan For</label>
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                  {[
+                    { label: "No Plan", value: null },
+                    { label: "Today", value: toLocalISOString() },
+                    { label: "Tomorrow", value: toLocalISOString(addDays(new Date(), 1)) },
+                  ].map((chip) => (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      onClick={() => setManualData({ ...manualData, plannedDate: chip.value || "" })}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
+                        (manualData.plannedDate === chip.value || (!manualData.plannedDate && chip.value === null))
+                          ? "bg-primary/20 border-primary/30 text-primary"
+                          : "bg-void border-white/5 text-zinc-500 hover:text-zinc-300"
+                      )}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setIsFormExpanded(true)}
+                    className={cn(
+                      "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
+                      manualData.plannedDate && 
+                      manualData.plannedDate !== toLocalISOString() && 
+                      manualData.plannedDate !== toLocalISOString(addDays(new Date(), 1))
+                        ? "bg-primary/20 border-primary/30 text-primary"
+                        : "bg-void border-white/5 text-zinc-500 hover:text-zinc-300"
+                    )}
+                  >
+                    {manualData.plannedDate && 
+                     manualData.plannedDate !== toLocalISOString() && 
+                     manualData.plannedDate !== toLocalISOString(addDays(new Date(), 1))
+                      ? format(new Date(manualData.plannedDate), "MMM d")
+                      : "Pick Date..."}
+                  </button>
+                </div>
+              </div>
+
               {isFormExpanded && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Custom Commitment</label>
+                    <input 
+                      type="date"
+                      className="w-full bg-void border border-white/5 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none transition-all text-white"
+                      value={manualData.plannedDate}
+                      onChange={(e) => setManualData({ ...manualData, plannedDate: e.target.value })}
+                    />
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Duration</label>
                     <input 

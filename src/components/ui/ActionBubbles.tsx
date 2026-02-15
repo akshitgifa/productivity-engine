@@ -77,7 +77,7 @@ export function ActionBubbles({ isVisible, activeActionId, onPlannedChange, cent
 
   const actions = useMemo(() => BUBBLE_POSITIONS.map(a => ({
     ...a,
-    label: a.id === "today" ? (onPlannedChange ? "Remove Today" : "Move to Today") : a.label
+    label: a.id === "today" ? (onPlannedChange ? "Remove Plan" : "Commit") : a.label
   })), [onPlannedChange]);
 
   if (!mounted || !center) return null;

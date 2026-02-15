@@ -5,13 +5,14 @@ import { FocusCard } from "@/components/ui/FocusCard";
 import { TimeAvailableSelector } from "@/components/layout/TimeAvailableSelector";
 import { useUserStore } from "@/store/userStore";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
-import { CheckCircle2, Share2 } from "lucide-react";
+import { CheckCircle2, Share2, Calendar as CalendarIcon, Zap, Target, Search, Settings, Trophy, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { sortTasksByUserOrder, mapTaskData, Task } from "@/lib/engine";
 import { taskService } from '@/lib/taskService';
 import { projectService } from '@/lib/projectService';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { format, addDays } from "date-fns";
 import { TaskDetailModal } from "@/components/tasks/TaskDetailModal";
 import { AnimatePresence, motion, Reorder } from "framer-motion";
 import { ReorderableItem } from "@/components/ui/ReorderableItem";
@@ -46,6 +47,7 @@ export default function Home() {
   };
   const [displayedTasks, setDisplayedTasks] = useState<Task[]>([]);
   const [hasMounted, setHasMounted] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(toLocalISOString());
 
   useEffect(() => {
     setHasMounted(true);
@@ -115,21 +117,62 @@ export default function Home() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const selectedTask = allActive.find(t => t.id === selectedTaskId);
 
-  // 2. Fetch Recently Completed Tasks Query from Local DB
+  // 2. Fetch Tasks Completed TODAY
   const { data: completedTodayData } = useQuery({
-    queryKey: ['history', 'recent'],
+    queryKey: ['history', 'today'],
     queryFn: async () => {
-      const tasks = await db.getActiveTasks({ state: 'Done' });
-      const recent = tasks.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 3);
+      const logs = await db.activity_logs.toArray();
+      const todayLogs = logs.filter(l => l.completed_at.startsWith(todayStr));
       
-      return await Promise.all(recent.map(async (t) => {
+      return await Promise.all(todayLogs.map(async (l) => {
+        const t = l.task_id ? await db.tasks.get(l.task_id) : null;
+        if (!t) return null;
         const projects = t.project_id ? await db.projects.get(t.project_id) : null;
         return { ...t, projects };
       }));
     }
   });
 
-  const completedToday = completedTodayData || EMPTY_ARRAY;
+  const completedToday = (completedTodayData || []).filter(Boolean);
+  
+  // 4. Retrospective Data Query
+  const { data: retrospectiveTasks = EMPTY_ARRAY } = useQuery({
+    queryKey: ['retrospective', selectedDate],
+    queryFn: async () => {
+      if (!selectedDate || selectedDate >= todayStr) return [];
+      
+      const logs = await db.activity_logs.toArray();
+      const dayLogs = logs.filter(l => l.completed_at.startsWith(selectedDate));
+      
+      const completed = await Promise.all(dayLogs.map(async (l) => {
+        const t = l.task_id ? await db.tasks.get(l.task_id) : null;
+        if (!t) return null;
+        const projects = t.project_id ? await db.projects.get(t.project_id) : null;
+        return mapTaskData({ 
+          ...t, 
+          projects, 
+          isCompleted: true
+        });
+      }));
+
+      const allTasks = await db.tasks.toArray();
+      const missed = await Promise.all(allTasks.filter(t => {
+        if (t.is_deleted) return false;
+        let taskPlannedDay = t.planned_date?.includes('T') ? toLocalISOString(new Date(t.planned_date)) : t.planned_date;
+        return taskPlannedDay === selectedDate && !dayLogs.some(l => l.task_id === t.id);
+      }).map(async (t) => {
+        const projects = t.project_id ? await db.projects.get(t.project_id) : null;
+        return mapTaskData({ 
+          ...t, 
+          projects, 
+          isMissed: true
+        });
+      }));
+
+      return [...completed.filter(Boolean), ...missed];
+    },
+    enabled: selectedDate < todayStr && viewMode === 'Today'
+  });
 
   // 3. Complete Task Mutation
   const completeMutation = useMutation({
@@ -221,7 +264,7 @@ export default function Home() {
   const toggleCommitment = useCallback(async (taskId: string, currentPlanned: boolean, targetPlanned?: boolean) => {
     // If targetPlanned is provided, use it; otherwise toggle
     const shouldPlan = targetPlanned !== undefined ? targetPlanned : !currentPlanned;
-    const nextPlanned = shouldPlan ? toLocalISOString() : null;
+    const nextPlanned = shouldPlan ? selectedDate : null;
     
     // Optimistic UI update
     const previousTasks = queryClient.getQueryData<Task[]>(['tasks', 'today']);
@@ -276,6 +319,10 @@ export default function Home() {
 
   // 1. Basic Filters (Project + Time)
   const memoizedDisplayTasks = useMemo(() => {
+    if (viewMode === 'Today' && selectedDate < todayStr) {
+      return retrospectiveTasks;
+    }
+
     let filtered = allActive;
     if (projectFilters.length > 0) {
       filtered = allActive.filter((t) => {
@@ -294,28 +341,32 @@ export default function Home() {
     if (viewMode !== 'Today') return filtered;
 
     // View Mode Filters
-    return filtered.filter((t: Task) => {
+    const filteredResults = filtered.filter((t: Task) => {
       // Normalize plannedDate: handle both old ISO strings and new local strings
-      let taskPlannedDay = null;
-      if (t.plannedDate) {
-        if (t.plannedDate.includes('T')) {
-          // Legacy ISO format - convert to local date string for comparison
-          taskPlannedDay = toLocalISOString(new Date(t.plannedDate));
-        } else {
-          // New standardized local format (YYYY-MM-DD)
-          taskPlannedDay = t.plannedDate;
-        }
-      }
-
-      const isPlannedToday = taskPlannedDay === todayStr;
+      const taskPlannedDay = t.plannedDate?.includes('T') ? toLocalISOString(new Date(t.plannedDate)) : t.plannedDate;
+      const isPlannedOnSelected = taskPlannedDay === selectedDate;
       
       // Compare local date strings for due dates
       const taskDueDateStr = t.dueDate ? toLocalISOString(t.dueDate) : null;
-      const isDueTodayOrOverdue = taskDueDateStr && taskDueDateStr <= todayStr;
       
-      return isPlannedToday || isDueTodayOrOverdue;
+      // If selected date is today, show due today + overdue + carry-forward
+      if (selectedDate === todayStr) {
+        const isDueTodayOrOverdue = taskDueDateStr && taskDueDateStr <= todayStr;
+        const isCarriedForward = taskPlannedDay && taskPlannedDay < todayStr;
+        return isPlannedOnSelected || isDueTodayOrOverdue || isCarriedForward;
+      }
+      
+      // If selected date is future, only show what's planned for that specific day
+      return isPlannedOnSelected;
     });
-  }, [allActive, projectFilters, timeAvailable, viewMode, todayStr]);
+
+    if (viewMode === 'Today' && selectedDate === todayStr) {
+      const doneToday = completedToday.map((t: any) => mapTaskData({ ...t, isCompleted: true }));
+      return [...filteredResults, ...doneToday];
+    }
+
+    return filteredResults;
+  }, [allActive, projectFilters, timeAvailable, viewMode, todayStr, selectedDate, retrospectiveTasks, completedToday]);
 
   // Group tasks by project for Master List
   const groupedMasterTasks = useMemo(() => {
@@ -325,7 +376,7 @@ export default function Home() {
     const tasks = memoizedDisplayTasks;
     const groups: Record<string, { id: string, name: string, tasks: Task[] }> = {};
     
-    tasks.forEach(task => {
+    tasks.forEach((task: Task) => {
       const pid = task.projectId || 'c0ffee00-0000-0000-0000-000000000000';
       if (!groups[pid]) {
         groups[pid] = {
@@ -397,7 +448,14 @@ export default function Home() {
           <div>
             <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-1">Intelligence</p>
             <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
-              Today
+              {(() => {
+                if (selectedDate === todayStr) return "Today";
+                const tomorrow = toLocalISOString(addDays(new Date(), 1));
+                if (selectedDate === tomorrow) return "Tomorrow";
+                const yesterday = toLocalISOString(addDays(new Date(), -1));
+                if (selectedDate === yesterday) return "Yesterday";
+                return format(new Date(selectedDate), "EEEE");
+              })()}
             </h1>
           </div>
           <div className="flex gap-4 items-center">
@@ -433,6 +491,57 @@ export default function Home() {
             Master List
           </button>
         </div>
+
+        {/* Day Picker */}
+        {viewMode === 'Today' && (
+          <div className="flex gap-2 items-center mb-4">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 flex-1">
+              {Array.from({ length: 9 }).map((_, i) => {
+                const date = new Date();
+                date.setDate(date.getDate() + (i - 2)); // Show 2 days ago, yesterday, today, and next 6 days
+                const dateStr = toLocalISOString(date);
+                const isSelected = selectedDate === dateStr;
+                const isToday = dateStr === todayStr;
+
+                return (
+                  <button
+                    key={dateStr}
+                    onClick={() => setSelectedDate(dateStr)}
+                    className={cn(
+                      "flex flex-col items-center justify-center min-w-[60px] h-16 rounded-2xl border transition-all relative shrink-0",
+                      isSelected 
+                        ? "bg-primary text-void border-primary shadow-lg scale-105" 
+                        : "bg-surface/40 border-border/20 text-zinc-500 hover:border-zinc-400"
+                    )}
+                  >
+                    <span className="text-[8px] font-black uppercase tracking-widest opacity-60">
+                      {format(date, "EEE")}
+                    </span>
+                    <span className="text-sm font-bold">
+                      {format(date, "d")}
+                    </span>
+                    {isToday && !isSelected && (
+                      <div className="absolute top-1 right-1 w-1 h-1 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            
+            {/* Full Calendar Toggle / Pick Date */}
+            <div className="relative group shrink-0">
+               <input 
+                 type="date"
+                 className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
+                 value={selectedDate}
+                 onChange={(e) => setSelectedDate(e.target.value)}
+               />
+               <button className="h-16 w-12 flex items-center justify-center rounded-2xl bg-surface/40 border border-border/20 text-zinc-500 group-hover:border-primary/30 group-hover:text-primary transition-all">
+                 <CalendarIcon size={18} />
+               </button>
+            </div>
+          </div>
+        )}
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
@@ -559,8 +668,18 @@ export default function Home() {
                     subtasksCount={task.subtasksCount}
                     completedSubtasksCount={task.completedSubtasksCount}
                     projectColor={task.projectColor}
-                    isPlanned={!!task.plannedDate?.startsWith(todayStr)}
-                    onPlannedChange={(next) => toggleCommitment(task.id, !!task.plannedDate?.startsWith(todayStr), next)}
+                    isPlanned={(() => {
+                      let taskPlannedDay = task.plannedDate?.includes('T') ? toLocalISOString(new Date(task.plannedDate)) : task.plannedDate;
+                      return taskPlannedDay === selectedDate;
+                    })()}
+                    onPlannedChange={(next) => toggleCommitment(task.id, !!task.plannedDate?.startsWith(selectedDate), next)}
+                    isCarriedForward={(() => {
+                      if (selectedDate !== todayStr) return false;
+                      let taskPlannedDay = task.plannedDate?.includes('T') ? toLocalISOString(new Date(task.plannedDate)) : task.plannedDate;
+                      return !!(taskPlannedDay && taskPlannedDay < todayStr);
+                    })()}
+                    isMissed={task.isMissed}
+                    isCompleted={task.isCompleted}
                   />
                 </ReorderableItem>
               ))}
@@ -619,7 +738,7 @@ export default function Home() {
               <div className="space-y-4">
                 <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.3em]">Top Picks from Engine</h3>
                 <div className="grid grid-cols-1 gap-3">
-                  {memoizedDisplayTasks.slice(0, 3).map(task => (
+                  {memoizedDisplayTasks.slice(0, 3).map((task: Task) => (
                     <div key={task.id} className="bg-surface/40 border border-border/10 rounded-2xl p-4 flex items-center justify-between group hover:border-primary/20 transition-all">
                       <div className="flex items-center gap-4">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: task.projectColor || '#10b981' }} />

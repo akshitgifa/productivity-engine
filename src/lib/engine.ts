@@ -22,6 +22,8 @@ export interface Task {
   projectColor?: string;
   sortOrder: number;
   plannedDate?: string;
+  isMissed?: boolean;
+  isCompleted?: boolean;
 }
 
 const TIER_WEIGHTS: Record<ProjectTier, number> = {
@@ -75,7 +77,9 @@ export function mapTaskData(t: any): Task {
     waitingUntil: t.waiting_until ? new Date(t.waiting_until) : null,
     projectColor: getProjectColor(t.projects?.name || (t.project_id && t.project_id !== 'c0ffee00-0000-0000-0000-000000000000' ? "Project..." : "Inbox"), t.projects?.color),
     sortOrder: t.sort_order ?? 0,
-    plannedDate: t.planned_date
+    plannedDate: t.planned_date,
+    isMissed: t.isMissed,
+    isCompleted: t.isCompleted
   };
 }
 

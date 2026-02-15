@@ -23,6 +23,9 @@ interface FocusCardProps {
   isPlanned?: boolean;
   onPlannedChange?: (isPlanned: boolean) => void;
   onInteractionChange?: (active: boolean) => void;
+  isCarriedForward?: boolean;
+  isMissed?: boolean;
+  isCompleted?: boolean;
   // Unified drag props
   isDragging?: boolean;
   dragOffset?: { x: number; y: number };
@@ -51,7 +54,10 @@ export function FocusCard({
   onInteractionChange,
   isDragging,
   dragOffset,
-  dragStartCenter
+  dragStartCenter,
+  isCarriedForward,
+  isMissed,
+  isCompleted
 }: FocusCardProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
 
@@ -67,7 +73,7 @@ export function FocusCard({
 
 
   // Reactive bubble logic
-  const bubblesActive = isMobile && isDragging && dragOffset 
+  const bubblesActive = isMobile && isDragging && dragOffset && !isMissed && !isCompleted
     ? (Math.sqrt(dragOffset.x * dragOffset.x + dragOffset.y * dragOffset.y) < BUBBLE_RADIUS)
     : false;
 
@@ -107,14 +113,17 @@ export function FocusCard({
 
   const cardContent = (
     <div className="flex flex-col h-full pointer-events-none">
-      <div className="flex justify-between items-start mb-3">
+      <div className={cn("flex justify-between items-start", (isMissed || isCompleted) ? "mb-1.5" : "mb-3")}>
         <div className="flex items-center gap-2">
+          {isCarriedForward && (
+             <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary-rgb),0.6)]" />
+          )}
           <div 
             className="w-1.5 h-1.5 rounded-full" 
             style={{ backgroundColor: projectColor || (tier === 1 ? "#ef4444" : tier === 2 ? "#3b82f6" : "#10b981") }}
           />
           <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest leading-none">
-            {project}
+            {isCarriedForward ? "Carried Forward • " : ""}{project}
           </span>
         </div>
         
@@ -137,7 +146,7 @@ export function FocusCard({
           <span className="text-[10px] font-bold text-zinc-500 bg-void/50 px-2 py-0.5 rounded-full border border-border/30">
             {duration}
           </span>
-          {!isMobile && onUndo && (
+          {!isMobile && onUndo && !isCompleted && !isMissed && (
             <button 
               onClick={(e) => { e.stopPropagation(); onUndo(); }}
               className="p-1 text-zinc-500 hover:text-white transition-colors ml-1 pointer-events-auto"
@@ -150,8 +159,10 @@ export function FocusCard({
       </div>
       
       <h3 className={cn(
-        "text-xl font-semibold tracking-tight leading-tight mb-1",
-        isActive ? "text-white" : "text-zinc-300"
+        "font-semibold tracking-tight leading-tight transition-all duration-300",
+        (isMissed || isCompleted) ? "text-base mb-0" : "text-lg mb-1",
+        isActive ? "text-white" : "text-zinc-300",
+        isCompleted && "text-zinc-400 line-through decoration-[3.5px] decoration-primary opacity-100"
       )}>
         {title}
       </h3>
@@ -164,7 +175,7 @@ export function FocusCard({
         </div>
       )}
 
-      {!isMobile && !isDragging && (
+      {!isMobile && !isDragging && !isCompleted && !isMissed && (
         <div className="absolute inset-0 bg-void/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-300 rounded-2xl flex items-center justify-center gap-4 z-10 pointer-events-auto">
           {onPlannedChange && (
             <button 
@@ -230,14 +241,17 @@ export function FocusCard({
 
       <motion.div
         onClick={() => {
-          if (!bubblesActive) onClick?.();
+          if (!bubblesActive && !isMissed && !isCompleted) onClick?.();
         }}
         className={cn(
-          "relative bg-surface border rounded-2xl p-5 card-shadow cursor-pointer will-change-transform z-10",
-          bubblesActive ? "transition-none" : "transition-all duration-300",
+          "relative bg-surface border rounded-2xl transition-all duration-300 card-shadow cursor-pointer will-change-transform z-10",
+          (isMissed || isCompleted) ? "p-3.5" : "p-4 md:p-4.5",
+          bubblesActive ? "transition-none" : "",
           isActive ? "bg-surface/90 border-transparent shadow-[0_0_30px_-10px_rgba(0,0,0,0.5)]" : "border-transparent hover:border-border/50",
           !isMobile && !isDragging && "group-hover:border-border/30",
-          bubblesActive && "brightness-75 contrast-110"
+          bubblesActive && "brightness-75 contrast-110",
+          isMissed && "opacity-40 border-dashed border-zinc-800 scale-[0.98] blur-[0.2px]",
+          isCompleted && "bg-emerald-500/[0.01] border-emerald-500/5 opacity-80"
         )}
         style={{ 
           background: isActive 
@@ -249,10 +263,12 @@ export function FocusCard({
       >
         {/* Left Accent Bar */}
         <div 
-          className="absolute left-0 top-6 bottom-6 w-1 rounded-r-full transition-all duration-300"
+          className="absolute left-0 w-1 rounded-r-full transition-all duration-300"
           style={{ 
-            backgroundColor: projectColor || '#facc15',
-            opacity: isActive ? 1 : 0.3
+            top: (isMissed || isCompleted) ? '12px' : '16px',
+            bottom: (isMissed || isCompleted) ? '12px' : '16px',
+            backgroundColor: isCompleted ? '#10b981' : isMissed ? '#27272a' : (projectColor || '#facc15'),
+            opacity: isMissed ? 0.2 : (isActive ? 1 : 0.3)
           }}
         />
         {cardContent}
