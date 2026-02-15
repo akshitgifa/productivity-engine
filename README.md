@@ -96,7 +96,8 @@ pnpm dev
 ```
 
 ### Developer References
-- [plan.md](./plan.md) — Roadmap and pending features
+- [docs/v2_ux_vision.md](./docs/v2_ux_vision.md) — **Strategic Roadmap for Entropy v2.0**
+- [plan.md](./plan.md) — Detailed engineering roadmap and pending features
 - [ai_assistant_spec.md](./ai_assistant_spec.md) — AI tool catalog and voice interface
 - [docs/](./docs/) — Detailed architecture docs
 

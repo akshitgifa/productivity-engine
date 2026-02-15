@@ -24,11 +24,16 @@
 - **Creative Customization:** High-fidelity project card personalization with "Live Preview" and real-time feedback.
 - **Mobile Refinements:** **Unified DraggableDrawer** with velocity-sensitive snapping, native pointer event control, and portal-based z-index (10000) layering.
 
-### v2.0 Vision: The Second Brain
-The next evolution focus on three pillars:
-1. **Memory:** Establishing a transparent, human-inspired memory system.
-2. **Subconscious:** Background processing for "fire and forget" thought dumps and research.
-3. **Temporal Anchors:** Intelligent handling of time-sensitive information within notes.
+### v2.0 Vision: The Strategic Roadmap
+The next evolution of Entropy focuses on moving from a productivity tool to a **Long-Term Context Engine**. 
+
+Detailed planning for this phase is maintained in [docs/v2_ux_vision.md](file:///Users/akshit2434/github/productivity-engine/docs/v2_ux_vision.md).
+
+Key Pillars from the Vision:
+1. **The Navigation Engine:** Mastering the Daily Fortress vs. the Global Syllabus.
+2. **Accountability & Momentum:** Honest retrospectives and intentional carry-forward logic.
+3. **Soft Windows & Dynamic Decay:** High-intensity focus through smart visual priority.
+4. **The Second Brain:** Long-term memory, subagents, and proactive intelligence.
 
 ---
 

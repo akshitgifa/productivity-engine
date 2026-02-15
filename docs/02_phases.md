@@ -1,6 +1,9 @@
 # Entropy v2.0: Implementation Phases
 
-Execution is divided into 5 testable phases. **USER MUST TEST AFTER EACH PHASE.**
+Execution is divided into testable phases. **USER MUST TEST AFTER EACH PHASE.**
+
+> [!NOTE]
+> Strategic direction for future phases is now governed by the [Entropy v2.0 UX Vision](file:///Users/akshit2434/github/productivity-engine/docs/v2_ux_vision.md). Refer to that document for background on Navigation, Commitment, and Soft Windows logic.
 
 ---
 
