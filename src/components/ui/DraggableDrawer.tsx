@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence, useDragControls, PanInfo, useAnimation } from "framer-motion";
+import { motion, AnimatePresence, useDragControls, PanInfo } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface DraggableDrawerProps {
@@ -26,20 +26,16 @@ export function DraggableDrawer({
   expandedHeight = "95vh",
 }: DraggableDrawerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const controls = useAnimation();
   const dragControls = useDragControls();
 
-  // Snapping logic
+  // Reset internal state when closed to ensure a clean start next time
   useEffect(() => {
-    if (isOpen) {
-      controls.start("peek");
-    } else {
-      controls.start("closed");
+    if (!isOpen) {
       setIsExpanded(false);
     }
-  }, [isOpen, controls]);
+  }, [isOpen]);
 
-  const handleDragEnd = (event: any, info: PanInfo) => {
+  const handleDragEnd = (_: any, info: PanInfo) => {
     const { offset, velocity } = info;
     
     // Drag down to close
@@ -48,24 +44,27 @@ export function DraggableDrawer({
     } 
     // Drag up to expand
     else if (offset.y < -100 || velocity.y < -500) {
-      controls.start("expanded");
       setIsExpanded(true);
     }
     // Drag down to shrink (if expanded)
     else if (isExpanded && (offset.y > 50 || velocity.y > 200)) {
-      controls.start("peek");
       setIsExpanded(false);
-    } else {
-      controls.start(isExpanded ? "expanded" : "peek");
     }
   };
 
+  const drawerVariants = {
+    closed: { y: "100%" },
+    peek: { y: `calc(100% - ${peekHeight})` },
+    expanded: { y: `calc(100% - ${expandedHeight})` }
+  };
+
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="sync">
       {isOpen && (
         <>
           {/* Backdrop */}
           <motion.div
+            key="backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -73,38 +72,32 @@ export function DraggableDrawer({
             onClick={onClose}
           />
           
-          {/* Drawer (Mobile) / Modal (Desktop) */}
+          {/* Mobile Drawer */}
           <motion.div
+            key="mobile-drawer"
+            className={cn(
+              "fixed inset-x-0 bottom-0 z-[102] bg-zinc-900 border-t border-white/10 shadow-2xl flex flex-col rounded-t-[2.5rem] md:hidden h-screen",
+              className
+            )}
+            variants={drawerVariants}
             initial="closed"
-            animate={controls}
+            animate={isExpanded ? "expanded" : "peek"}
             exit="closed"
-            variants={{
-              peek: { y: `calc(100vh - ${peekHeight})` },
-              expanded: { y: `calc(100vh - ${expandedHeight})` },
-              closed: { y: "100vh" }
-            }}
-            transition={{ 
-              type: "spring", 
-              damping: 30, 
-              stiffness: 300
-            }}
+            transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
             drag="y"
             dragControls={dragControls}
             dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.1}
+            dragElastic={0.05}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "fixed inset-x-0 bottom-0 z-[102] bg-zinc-900 border-t border-white/10 shadow-2xl overflow-hidden flex flex-col rounded-t-[2.5rem] md:hidden",
-              className
-            )}
             onClick={(e) => e.stopPropagation()}
+            style={{ touchAction: "none" }} // Prevent browser scroll interference
           >
             {/* Handle area */}
             <div 
-              className="mt-4 mb-2 shrink-0 cursor-grab active:cursor-grabbing flex flex-col items-center"
+              className="pt-4 pb-2 shrink-0 cursor-grab active:cursor-grabbing flex flex-col items-center"
               onPointerDown={(e) => dragControls.start(e)}
             >
-              <div className="w-12 h-1 bg-zinc-800 rounded-full" />
+              <div className="w-12 h-1.5 bg-zinc-800 rounded-full" />
             </div>
 
             <div className="flex justify-between items-center px-6 py-2 shrink-0">
@@ -119,9 +112,11 @@ export function DraggableDrawer({
 
           {/* Desktop Modal version */}
           <motion.div
+            key="desktop-modal"
             initial={{ opacity: 0, scale: 0.95, x: "-50%", y: "-45%" }}
             animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
             exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-45%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
             className={cn(
               "fixed top-1/2 left-1/2 z-[102] bg-zinc-900 border border-white/10 shadow-2xl hidden md:flex flex-col w-[420px] rounded-[2.5rem] max-h-[85vh] overflow-hidden",
               className
