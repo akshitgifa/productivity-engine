@@ -66,107 +66,45 @@ Execution is divided into testable phases. **USER MUST TEST AFTER EACH PHASE.**
  
 ---
  
-## Phase 2.7: Today View & Intentionality ✅
-**Goal:** Focus from "everything" to "today's commitments".
+## Phase 2.12: Navigation & Momentum Engine (P0) ✅
+**Goal:** Unified navigable agenda with intentional commitment and historical auditing.
 
 ### Tasks
-- [x] **2.7.1 Schema:** Add `planned_date` to tasks table (and cloud migration).
-- [x] **2.7.2 UI:** Replace "Orbit" with "Today" view. Implement Today/Syllabus toggle.
-- [x] **2.7.3 Mobile:** Build "Action Bubbles" (Hold-and-drag menu) for Complete/Delete/Commit.
-- [x] **2.7.4 Engine:** Standardize local date string comparison to fix midnight-to-5:30AM timezone gap.
-- [x] **2.7.5 Proactive:** "Plan Your Day" empty state with "Top Picks" from the Syllabus.
+- [x] **2.12.1 Engine:** Multi-day `memoizedDisplayTasks` with swipeable header navigation.
+- [x] **2.12.2 Logic:** Carry-Forward logic (past tasks automatically appear in Today).
+- [x] **2.12.3 Retrospective:** Journal-style view for past days (Missed vs. Completed logic).
+- [x] **2.12.4 Momentum:** Today's completed tasks stay in the agenda list with bold visuals.
+- [x] **2.12.5 UX:** Unified action bubbles for mobile task orchestration.
 
-**TESTED ✅:** User verified the "Commit" flow and the creative mobile interaction bubble feedback.
+**TESTED ✅:** User confirmed the "Navigation Engine" and "Momentum Engine" are fully operational.
 
 ---
 
-## Phase 2.8: Account & Identity ✅
-**Goal:** Secure multi-user support and personal environment settings.
+## Phase 3: Soft Windows & Dynamic Decay (P1)
+**Goal:** Flexible non-deadline scheduling and automatic maintenance of the backlog.
 
 ### Tasks
-- [x] **2.8.1 Auth:** Fully integrated Supabase Auth with registration, login, and email verification.
-- [x] **2.8.2 Flow:** Implemented "Forgot Password" and "Reset Password" security loops.
-- [x] **2.8.3 Identity:** Build "Profile" page for managing display names and user metadata.
-- [x] **2.8.4 Preferences:** Build "Settings" page for Focus Window and connectivity monitoring.
-- [x] **2.8.5 Privacy:** Isolated all local data per-user and implemented multi-tab multi-user safety.
-
-**TESTED ✅:** User verified registration, login, and profile persistency.
+- [ ] **3.1 Schema:** Update tasks table with `soft_window_days` and `auto_scheduled_date`.
+- [ ] **3.2 Engine:** Implement "Circadian Logic" in `engine.ts` to distribute soft-pool tasks into the agenda gaps.
+- [ ] **3.3 UX:** Add "Within X Days" selector to Quick Capture and Task Detail.
+- [ ] **3.4 Decay:** Implement surfacing logic for rotting tasks (untouched for >14 days).
 
 ---
 
-## Phase 2.9: Creative Customization (Live Preview) ✅
-**Goal:** High-fidelity project card personalization with real-time feedback.
+## Phase 4: Zero-Friction Dump (P2)
+**Goal:** The universal receiver — auto-classification of thoughts vs. tasks.
 
 ### Tasks
-- [x] **2.9.1 UI:** Build "Project Settings Popout" with `react-colorful` and layout controls.
-- [x] **2.9.2 Preview:** Implement "Card Isolation" (scaling + dimming backdrop) when editing.
-- [x] **2.9.3 Logic:** Add real-time style overrides (bgColor, color, fontFamily) via local state.
-- [x] **2.9.4 Themes:** Create distinct theme presets (Glass, Neo-Brutal, Cyberpunk, etc.).
-- [x] **2.9.5 Layout:** Implement snapping grid size controls for project cards.
-
-**TESTED ✅:** Real-time customization works for all projects. Themes override custom styles correctly.
+- [ ] **4.1 AI:** Enhance the backend classifier to handle ambiguous dumps (thought vs. task vs. note).
+- [ ] **4.2 UI:** Unified input bar that accepts anything without mode-switching.
+- [ ] **4.3 Verification:** "Catch Up" loop refinement to process ambiguous dumps into structured records.
 
 ---
 
-## Phase 2.10: Mobile Interaction & Performance ✅
-**Goal:** Frictionless mobile gestures and optimistic page loads.
+## Phase 5: Super Input & Final Polish
+**Goal:** Power-user speed layers and deep context integration.
 
 ### Tasks
-- [x] **2.10.1 UX:** Implement 600ms long-press gesture with haptic feedback for mobile customization.
-- [x] **2.10.2 UI:** Ensure settings icon is always visible on touch devices for discoverability.
-- [x] **2.10.3 Performance:** Replace text-based loading state with layout-matched Skeleton Loaders.
-- [x] **2.10.4 Hydration:** Implement progressive loading (Identity first, tasks/analytics later).
-
-**TESTED ✅:** Mobile long-press is reliable. Project pages feel "instant" due to skeletons and local cache.
-
----
-
-## Phase 2.11: UI & Sync Stabilization ✅
-**Goal:** Unified gesture primitives and race-condition free synchronization.
-
-### Tasks
-- [x] **2.11.1 UI:** Build unified `DraggableDrawer` with **Projection-Based Snapping** (velocity-aware).
-- [x] **2.11.2 UI:** Port `QuickCapture` and `ProjectSettings` to the new stable drawer primitive.
-- [x] **2.11.3 UI:** Implement portal-based layering with high z-index (10000) for global coverage.
-- [x] **2.11.4 Sync:** Implement **Instance Mutex** (`initialSyncInProgress`) to eliminate `AbortError` race conditions.
-- [x] **2.11.5 Hydration:** Added **Hydration Guards** and `viewMode` persistence to ensure visual stability.
-
-**TESTED ✅:** Drawer gestures feel native. Rapid refreshes are stable. Master List view persists.
-
----
-
-## Phase 3: Background Intelligence (The Subconscious)
-**Goal:** Subagents and web research.
-
-### Tasks
-- [ ] **3.1 Database:** Create `background_jobs` and `job_logs` tables.
-- [ ] **3.2 Logic:** Create Supabase Edge Function `subagent-executor` with full tool access.
-- [ ] **3.3 Assistant:** Implement `spawn_subagent` and `search_web` tools.
-- [ ] **3.4 UI:** Build real-time "Background Tasks" panel in the chat view.
-
-**TEST:** Say "Research feasibility of Pursuing Brass Keyboards". Verify job starts and logs progress.
-
----
-
-## Phase 4: Smart Notes (Temporal Anchors)
-**Goal:** Line-level intelligence and interactive notes.
-
-### Tasks
-- [ ] **4.1 Logic:** Implement Regex parser for `@date` anchors in note content.
-- [ ] **4.2 UI:** Customize Markdown renderer to Highlight anchors and render clickable checkboxes `[ ]`.
-- [ ] **4.3 Feature:** Clicking an anchor allows spawning a Task with that date.
-
-**TEST:** Write "Register for summit @March 15" in a note. Verify date is highlighted and clickable.
-
----
-
-## Phase 5: Polish & Integration
-**Goal:** Final refinement and seamless navigation.
-
-### Tasks
-- [ ] **5.1 Integration:** Deep link Catch Up cards to their respective notes/projects.
-- [ ] **5.2 Polish:** Refine Sparkle pulse animations and job log UI.
-- [ ] **5.3 Context:** Enable "Contextual Assistant" - button in notes to chat specifically about that note.
-- [ ] **5.4 Final Docs:** Update README and project specs to reflect v2.0 stable.
-
-**TEST:** Full walkthrough of the Second Brain loop.
+- [ ] **5.1 UX:** Real-time token highlighting for `#project`, `@date`, and `!priority` in input.
+- [ ] **5.2 Context:** Integrated "Contextual Assistant" scoped to individual project cards.
+- [ ] **5.3 Performance:** Final bundle optimization and haptic refinement for all gestures.

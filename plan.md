@@ -31,18 +31,22 @@
 - [x] **viewMode Persistence**: Home page remembers Today vs Master List view
 - [x] **Real-time UI Refresh**: Auto-update on sync completion via global event bridge
 
-## Pending
+## Pending (Entropy v2.0 Roadmap)
 
-### Proactive Intelligence
-- [ ] Decay notifications — AI alerts user about critical project entropy
-- [ ] Dynamic KPI suggestions based on task completion patterns
+> Refining the engine into a long-term context guardian. Full vision in [docs/v2_ux_vision.md](./docs/v2_ux_vision.md).
 
-### Execution Optimization
-- [ ] Pomodoro integration — timer synced with session modes
+### 🕒 Temporal Intelligence (P1)
+- [ ] **Soft Windows**: "Do within 5 days" pool with automatic distribution into the agenda.
+- [ ] **Dynamic Decay**: AI-driven surfacing of rotting tasks ("Is this still relevant?").
 
-### Knowledge Graph
-- [ ] Cross-note linking and backlinks
-- [ ] Contextual assistant scoped to individual notes
+### 🧠 The Second Brain (P2)
+- [ ] **Zero-Friction Dump**: Universal input bar with AI auto-classification (Task/Thought/Note).
+- [ ] **Super Input**: Power-user syntax for `#project`, `@date`, and `!priority` tokens.
+- [ ] **Contextual Assistant**: Note-scoped and project-scoped AI conversations.
+
+### 🛠️ Execution & Polish
+- [ ] Pomodoro/Timer integration synced with session modes.
+- [ ] Cross-note linking and centralized knowledge graph.
 
 ---
 
