@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence, useDragControls, PanInfo } from "framer-motion";
+import React, { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence, useDragControls, PanInfo, useAnimation } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface DraggableDrawerProps {
@@ -26,40 +26,64 @@ export function DraggableDrawer({
   expandedHeight = "95vh",
 }: DraggableDrawerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const controls = useAnimation();
   const dragControls = useDragControls();
 
-  // Reset internal state when closed to ensure a clean start next time
+  // Snapping points as percentages of 100vh
+  // peek: (1 - 0.60) * 100 = 40vh from top
+  // expanded: (1 - 0.95) * 100 = 5vh from top
+
+  const snapTo = useCallback((state: "peek" | "expanded" | "closed") => {
+    if (state === "closed") {
+      controls.start("closed").then(() => {
+        onClose();
+      });
+    } else {
+      controls.start(state);
+      setIsExpanded(state === "expanded");
+    }
+  }, [controls, onClose]);
+
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      snapTo("peek");
+    } else {
+      controls.set("closed");
       setIsExpanded(false);
     }
-  }, [isOpen]);
+  }, [isOpen, snapTo, controls]);
 
   const handleDragEnd = (_: any, info: PanInfo) => {
     const { offset, velocity } = info;
     
-    // Drag down to close
+    // Close threshold
+    // If dragging down from peek OR dragging down significantly from expanded
     if (offset.y > 150 || velocity.y > 500) {
-      onClose();
+      if (isExpanded && offset.y < 300 && velocity.y < 800) {
+        // Just shrink to peek if was expanded and drag wasn't massive
+        snapTo("peek");
+      } else {
+        snapTo("closed");
+      }
     } 
-    // Drag up to expand
+    // Expand threshold
     else if (offset.y < -100 || velocity.y < -500) {
-      setIsExpanded(true);
+      snapTo("expanded");
     }
-    // Drag down to shrink (if expanded)
-    else if (isExpanded && (offset.y > 50 || velocity.y > 200)) {
-      setIsExpanded(false);
+    // Snap back or toggle between states
+    else {
+      snapTo(isExpanded ? "expanded" : "peek");
     }
   };
 
   const drawerVariants = {
     closed: { y: "100%" },
-    peek: { y: `calc(100% - ${peekHeight})` },
-    expanded: { y: `calc(100% - ${expandedHeight})` }
+    peek: { y: `calc(100vh - ${peekHeight})` },
+    expanded: { y: `calc(100vh - ${expandedHeight})` }
   };
 
   return (
-    <AnimatePresence mode="sync">
+    <AnimatePresence mode="wait">
       {isOpen && (
         <>
           {/* Backdrop */}
@@ -69,7 +93,7 @@ export function DraggableDrawer({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-[2px]"
-            onClick={onClose}
+            onClick={() => snapTo("closed")}
           />
           
           {/* Mobile Drawer */}
@@ -81,7 +105,7 @@ export function DraggableDrawer({
             )}
             variants={drawerVariants}
             initial="closed"
-            animate={isExpanded ? "expanded" : "peek"}
+            animate={controls}
             exit="closed"
             transition={{ type: "spring", damping: 30, stiffness: 300, mass: 0.8 }}
             drag="y"
@@ -90,7 +114,7 @@ export function DraggableDrawer({
             dragElastic={0.05}
             onDragEnd={handleDragEnd}
             onClick={(e) => e.stopPropagation()}
-            style={{ touchAction: "none" }} // Prevent browser scroll interference
+            style={{ touchAction: "none" }}
           >
             {/* Handle area */}
             <div 
