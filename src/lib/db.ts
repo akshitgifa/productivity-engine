@@ -82,7 +82,11 @@ export interface Subtask {
 }
 
 export interface ContextCard {
+  id: string;
+  user_id?: string;
+  project_id: string;
   content: string;
+  is_deleted?: boolean;
   updated_at: string;
 }
 

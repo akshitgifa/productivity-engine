@@ -25,6 +25,10 @@ import { NoteEditor } from "@/components/notes/NoteEditor";
 import { Note } from "@/types/database";
 import { Book } from "lucide-react";
 
+const SkeletonPulse = ({ className }: { className?: string }) => (
+  <div className={cn("bg-zinc-800/50 animate-pulse rounded-2xl", className)} />
+);
+
 interface Project {
   id: string;
   name: string;
@@ -286,16 +290,13 @@ export default function ProjectDetailPage() {
     }
   }, [project, isProjectLoading, router]);
 
-  const isLoading = isProjectLoading || isTasksLoading;
-
-  if (isLoading) return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-700 animate-pulse">Syncing Matrix...</div>;
-  
-  if (!project || project.is_deleted) {
+  // If project is not found after loading, show error
+  if (!isProjectLoading && (!project || project.is_deleted)) {
     return <div className="px-6 pt-32 text-center text-[10px] font-extrabold uppercase tracking-[0.2em] text-rose-500/50">Entity Not Found</div>;
   }
 
-  const projectColor = getProjectColor(project.name, project.color);
-  const tierColor = project.tier === 1 ? "text-tier-1" : project.tier === 2 ? "text-tier-2" : "text-tier-3";
+  const projectColor = getProjectColor(project?.name || "", project?.color);
+  const tierColor = project?.tier === 1 ? "text-tier-1" : project?.tier === 2 ? "text-tier-2" : "text-tier-3";
 
   return (
     <div className="px-6 pt-12 pb-32 max-w-md md:max-w-7xl mx-auto overflow-x-hidden">
@@ -309,15 +310,25 @@ export default function ProjectDetailPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div 
-                className="w-2 h-2 rounded-full" 
-                style={{ backgroundColor: projectColor }}
-              />
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em]">
-                Tier_{project.tier}
-              </span>
+              {isProjectLoading ? (
+                <SkeletonPulse className="w-16 h-3" />
+              ) : (
+                <>
+                  <div 
+                    className="w-2 h-2 rounded-full" 
+                    style={{ backgroundColor: projectColor }}
+                  />
+                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.3em]">
+                    Tier_{project?.tier}
+                  </span>
+                </>
+              )}
             </div>
-            <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">{project.name}</h1>
+            {isProjectLoading ? (
+              <SkeletonPulse className="w-64 h-12 md:h-16" />
+            ) : (
+              <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white leading-tight">{project?.name}</h1>
+            )}
           </div>
           <button 
             onClick={() => setIsEditing(!isEditing)}
@@ -434,17 +445,17 @@ export default function ProjectDetailPage() {
                <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest block">Vitality State</span>
                <span className={cn(
                  "text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-tighter",
-                 (new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days
+                 project && (new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days
                    ? "text-rose-500 bg-rose-500/10"
                    : "text-emerald-500 bg-emerald-500/10"
                )}>
-                 { (new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days ? "Maintenance Required" : "Optimal Momentum" }
+                 { project ? ((new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days ? "Maintenance Required" : "Optimal Momentum") : "Scanning..." }
                </span>
              </div>
              
              <div className="flex items-baseline gap-4 mb-8">
                <span className="text-6xl md:text-8xl font-extrabold text-white tracking-tighter leading-none">
-                 {Math.floor((new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24))}
+                 {project ? Math.floor((new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24)) : <SkeletonPulse className="w-20 h-16" />}
                </span>
                <div className="flex flex-col">
                  <span className="text-base font-bold text-zinc-400 uppercase tracking-widest leading-none mb-1">Days</span>
@@ -455,24 +466,26 @@ export default function ProjectDetailPage() {
              <div className="space-y-3">
                 <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                   <span className="text-zinc-600">Focus Continuity</span>
-                  <span className="text-zinc-400">{Math.min(100, Math.round(((new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24)) / project.decay_threshold_days * 100))}%</span>
+                  <span className="text-zinc-400">
+                    {project ? Math.min(100, Math.round(((new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24)) / project.decay_threshold_days * 100)) : 0}%
+                  </span>
                 </div>
                 <div className="h-2.5 w-full bg-void rounded-full overflow-hidden p-[1px] border border-border/20">
                   <div 
                     className={cn(
                       "h-full rounded-full transition-all duration-1000",
-                      (new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days ? "bg-rose-500" : ""
+                      project && (new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days ? "bg-rose-500" : ""
                     )}
                     style={{ 
-                      width: `${Math.min(100, ((new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24)) / project.decay_threshold_days * 100)}%`,
-                      backgroundColor: (new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days ? undefined : projectColor
+                      width: `${project ? Math.min(100, ((new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24)) / project.decay_threshold_days * 100) : 0}%`,
+                      backgroundColor: project && (new Date().getTime() - new Date(project.last_touched_at).getTime()) / (1000 * 60 * 60 * 24) > project.decay_threshold_days ? undefined : projectColor
                     }}
                   />
                 </div>
              </div>
           </div>
 
-          {!isAnalyticsLoading && metrics && (
+          {!isAnalyticsLoading && metrics && project && (
             <div className="bg-surface border border-transparent rounded-3xl p-8 card-shadow space-y-8">
               <div className="flex items-center justify-between">
                 <h3 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Automated Vitals</h3>
@@ -576,7 +589,7 @@ export default function ProjectDetailPage() {
             </div>
           </section>
 
-          <KPIManager projectId={project.id} />
+          <KPIManager projectId={id as string} />
 
           {/* New Two-Tier Tab System */}
           <section className="space-y-6">
@@ -638,7 +651,11 @@ export default function ProjectDetailPage() {
               >
                 {mainTab === "Tasks" ? (
                   <>
-                    {displayTasks.length === 0 ? (
+                    {isTasksLoading ? (
+                      <div className="space-y-4">
+                        {[1, 2, 3].map(i => <SkeletonPulse key={i} className="w-full h-24" />)}
+                      </div>
+                    ) : displayTasks.length === 0 ? (
                       <div className="text-center py-32 bg-surface/30 border border-dashed border-border/50 rounded-3xl">
                         <div className="w-16 h-16 bg-void/50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-border">
                           <Brain className="text-zinc-800" size={32} />
@@ -655,26 +672,26 @@ export default function ProjectDetailPage() {
                           as="div"
                         >
                           {displayTasks.map((task) => (
-                            <ReorderableItem
-                              key={task.id}
-                              value={task}
-                              onDragEnd={persistReorder}
-                            >
-                              <FocusCard 
-                                title={task.title}
-                                project={project.name}
-                                tier={project.tier as any}
-                                duration={`${task.durationMinutes}m`}
-                                dueDate={task.dueDate}
-                                isActive={true}
-                                onDelete={() => handleDeleteTask(task.id)}
-                                onComplete={() => handleComplete(task)}
-                                onClick={() => setSelectedTaskId(task.id)}
-                                subtasksCount={task.subtasksCount}
-                                completedSubtasksCount={task.completedSubtasksCount}
-                                projectColor={projectColor}
-                              />
-                            </ReorderableItem>
+                             <ReorderableItem
+                               key={task.id}
+                               value={task}
+                               onDragEnd={persistReorder}
+                             >
+                               <FocusCard 
+                                 title={task.title}
+                                 project={project?.name || ""}
+                                 tier={project?.tier as any || 3}
+                                 duration={`${task.durationMinutes}m`}
+                                 dueDate={task.dueDate}
+                                 isActive={true}
+                                 onDelete={() => handleDeleteTask(task.id)}
+                                 onComplete={() => handleComplete(task)}
+                                 onClick={() => setSelectedTaskId(task.id)}
+                                 subtasksCount={task.subtasksCount}
+                                 completedSubtasksCount={task.completedSubtasksCount}
+                                 projectColor={projectColor}
+                               />
+                             </ReorderableItem>
                           ))}
                         </Reorder.Group>
                       ) : (
@@ -688,8 +705,8 @@ export default function ProjectDetailPage() {
                             >
                               <FocusCard 
                                 title={task.title}
-                                project={project.name}
-                                tier={project.tier as any}
+                                project={project?.name || ""}
+                                tier={project?.tier as any || 3}
                                 duration={`${task.durationMinutes}m`}
                                 dueDate={task.dueDate}
                                 isActive={task.state === 'Active'}
@@ -723,7 +740,7 @@ export default function ProjectDetailPage() {
                             key={note.id}
                             note={{
                                 ...note,
-                                projects: { name: project.name, color: projectColor }
+                                projects: { name: project?.name || "", color: projectColor }
                             } as any}
                             onClick={() => setSelectedNote(note)}
                           />
@@ -770,7 +787,7 @@ export default function ProjectDetailPage() {
               <NoteEditor 
                 note={{
                     ...selectedNote,
-                    projects: { name: project.name, color: projectColor }
+                    projects: { name: project?.name || "", color: projectColor }
                 } as any}
                 onClose={() => setSelectedNote(null)} 
               />

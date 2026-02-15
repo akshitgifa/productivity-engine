@@ -36,6 +36,7 @@ export function ProjectSection({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [localStyles, setLocalStyles] = useState(customization?.customStyles || {});
+  const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
   const displayLimit = 5;
   const hasMore = tasks.length > displayLimit;
   const displayedTasks = isExpanded ? tasks : tasks.slice(0, displayLimit);
@@ -47,6 +48,24 @@ export function ProjectSection({
       setLocalStyles(customization?.customStyles || {});
     }
   }, [customization?.customStyles, isSettingsOpen]);
+
+  // Long Press Logic for Mobile Customization
+  const handleTouchStart = () => {
+    longPressTimer.current = setTimeout(() => {
+      // Subtle vibration if supported
+      if (typeof window !== 'undefined' && window.navigator.vibrate) {
+        window.navigator.vibrate(50);
+      }
+      setIsSettingsOpen(true);
+    }, 600); // 600ms for long press
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
 
   // Project Link
   const projectLink = `/portfolio/${projectId || 'c0ffee00-0000-0000-0000-000000000000'}`;
@@ -96,12 +115,15 @@ export function ProjectSection({
     )}>
       <motion.div 
         onClick={() => !isSettingsOpen && router.push(projectLink)}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchMove={handleTouchEnd} // Cancel on move
         animate={{
           scale: isSettingsOpen ? 1.02 : 1,
           filter: isSettingsOpen ? 'brightness(1.05)' : 'brightness(1)',
         }}
         className={cn(
-          "rounded-3xl p-5 h-full space-y-4 shadow-sm transition-all duration-300 cursor-pointer border relative",
+          "rounded-3xl p-5 h-full space-y-4 shadow-sm transition-all duration-300 cursor-pointer border relative select-none",
           themeClasses,
           fontClass,
           !customization?.theme && "hover:border-border/30 hover:bg-surface/30",
@@ -133,7 +155,7 @@ export function ProjectSection({
                 e.stopPropagation();
                 setIsSettingsOpen(!isSettingsOpen);
               }}
-              className="p-1.5 rounded-full bg-void/30 opacity-0 group-hover/section:opacity-100 transition-opacity hover:bg-void/50 text-zinc-400 hover:text-white"
+              className="p-1.5 rounded-full bg-void/30 md:opacity-0 md:group-hover/section:opacity-100 opacity-100 transition-all hover:bg-void/50 text-zinc-400 hover:text-white border border-white/5 shadow-inner"
             >
               <Settings size={12} />
             </button>
