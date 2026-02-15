@@ -91,6 +91,33 @@ Execution is divided into 5 testable phases. **USER MUST TEST AFTER EACH PHASE.*
 
 ---
 
+## Phase 2.9: Creative Customization (Live Preview) ✅
+**Goal:** High-fidelity project card personalization with real-time feedback.
+
+### Tasks
+- [x] **2.9.1 UI:** Build "Project Settings Popout" with `react-colorful` and layout controls.
+- [x] **2.9.2 Preview:** Implement "Card Isolation" (scaling + dimming backdrop) when editing.
+- [x] **2.9.3 Logic:** Add real-time style overrides (bgColor, color, fontFamily) via local state.
+- [x] **2.9.4 Themes:** Create distinct theme presets (Glass, Neo-Brutal, Cyberpunk, etc.).
+- [x] **2.9.5 Layout:** Implement snapping grid size controls for project cards.
+
+**TESTED ✅:** Real-time customization works for all projects. Themes override custom styles correctly.
+
+---
+
+## Phase 2.10: Mobile Interaction & Performance ✅
+**Goal:** Frictionless mobile gestures and optimistic page loads.
+
+### Tasks
+- [x] **2.10.1 UX:** Implement 600ms long-press gesture with haptic feedback for mobile customization.
+- [x] **2.10.2 UI:** Ensure settings icon is always visible on touch devices for discoverability.
+- [x] **2.10.3 Performance:** Replace text-based loading state with layout-matched Skeleton Loaders.
+- [x] **2.10.4 Hydration:** Implement progressive loading (Identity first, tasks/analytics later).
+
+**TESTED ✅:** Mobile long-press is reliable. Project pages feel "instant" due to skeletons and local cache.
+
+---
+
 ## Phase 3: Background Intelligence (The Subconscious)
 **Goal:** Subagents and web research.
 

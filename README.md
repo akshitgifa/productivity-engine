@@ -74,6 +74,8 @@ Setting a deadline resets `sort_order` to 0 (enters deadline pool). Dragging ass
 - **Profile & Settings**: Centralized account management and engine preference control
 - **Smart Recurrence**: Completed recurring tasks auto-spawn with `waiting_until` dates
 - **Master List**: Unified view of all fragments in the system
+- **Creative Customization**: Real-time theme editing with live preview and layout controls
+- **Mobile Performance**: Gesture-driven interactions (long-press) and skeleton-loading project pages
 
 ---
 
