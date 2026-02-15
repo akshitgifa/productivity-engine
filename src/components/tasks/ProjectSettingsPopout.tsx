@@ -2,10 +2,10 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check, Palette, Maximize2, Type, Pipette } from "lucide-react";
+import { X, Palette, Maximize2, Type, Pipette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HexColorPicker } from "react-colorful";
-import { BottomSheet } from "@/components/ui/BottomSheet";
+import { DraggableDrawer } from "@/components/ui/DraggableDrawer";
 
 interface ProjectSettingsPopoutProps {
   isOpen: boolean;
@@ -296,79 +296,36 @@ export function ProjectSettingsPopout({
   const [activePicker, setActivePicker] = useState<'bg' | 'text' | null>(null);
 
   return (
-    <>
-      <BottomSheet 
-        isOpen={isOpen} 
-        onClose={onClose} 
-        title="Project Customization"
-      >
-        <ProjectCustomizationContent 
-          currentSize={currentSize}
-          onSizeChange={onSizeChange}
-          currentTheme={currentTheme}
-          onThemeChange={onThemeChange}
-          currentStyles={currentStyles}
-          onStylesChange={onStylesChange}
-          onApplyToAll={onApplyToAll}
-          onApplySizeToAll={onApplySizeToAll}
-          activePicker={activePicker}
-          setActivePicker={setActivePicker}
-        />
-      </BottomSheet>
-
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            {/* Backdrop for desktop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-[2px] hidden md:block"
-              onClick={onClose}
-            />
-            
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className={cn(
-                "fixed z-[102] bg-zinc-900 border border-white/10 shadow-2xl overflow-hidden hidden md:flex flex-col",
-                "md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[420px] md:rounded-[2.5rem] md:max-h-[85vh]"
-              )}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex justify-between items-center p-6 pb-2 shrink-0">
-                <h4 className="text-[12px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-3">
-                  <Palette size={14} />
-                  Project Customization
-                </h4>
-                <button 
-                  onClick={onClose} 
-                  className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full transition-colors"
-                >
-                  <X size={18} className="text-zinc-400" />
-                </button>
-              </div>
-
-              <div className="px-6 pb-6 overflow-y-auto">
-                <ProjectCustomizationContent 
-                  currentSize={currentSize}
-                  onSizeChange={onSizeChange}
-                  currentTheme={currentTheme}
-                  onThemeChange={onThemeChange}
-                  currentStyles={currentStyles}
-                  onStylesChange={onStylesChange}
-                  onApplyToAll={onApplyToAll}
-                  onApplySizeToAll={onApplySizeToAll}
-                  activePicker={activePicker}
-                  setActivePicker={setActivePicker}
-                />
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </>
+    <DraggableDrawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title={
+        <h4 className="text-[12px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-3">
+          <Palette size={14} />
+          Project Customization
+        </h4>
+      }
+      headerAction={
+        <button 
+          onClick={onClose} 
+          className="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full transition-colors"
+        >
+          <X size={18} className="text-zinc-400" />
+        </button>
+      }
+    >
+      <ProjectCustomizationContent 
+        currentSize={currentSize}
+        onSizeChange={onSizeChange}
+        currentTheme={currentTheme}
+        onThemeChange={onThemeChange}
+        currentStyles={currentStyles}
+        onStylesChange={onStylesChange}
+        onApplyToAll={onApplyToAll}
+        onApplySizeToAll={onApplySizeToAll}
+        activePicker={activePicker}
+        setActivePicker={setActivePicker}
+      />
+    </DraggableDrawer>
   );
 }
