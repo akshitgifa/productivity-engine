@@ -23,6 +23,9 @@
 - **Soft-Delete with Undo:** 5-second safety window for deleted items.
 - **Creative Customization:** High-fidelity project card personalization with "Live Preview" and real-time feedback.
 - **Mobile Refinements:** **Unified DraggableDrawer** with velocity-sensitive snapping, native pointer event control, and portal-based z-index (10000) layering.
+- **Soft Windows & Distribution:** Flexible scheduling using windows (e.g., "Within 3 Days") that auto-distribute tasks into agenda gaps.
+- **Dynamic Backlog Decay:** Visual signaling of entropy through card "pulsing" for neglected/overdue tasks (3+ days).
+- **Refined Swipe UX:** Context-sensitive mobile actions with a lightweight rescheduling popover menu.
 
 ### v2.0 Vision: The Strategic Roadmap
 The next evolution of Entropy focuses on moving from a productivity tool to a **Long-Term Context Engine**. 

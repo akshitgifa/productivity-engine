@@ -8,7 +8,7 @@ import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
 import { CheckCircle2, Share2, Calendar as CalendarIcon, Zap, Target, Search, Settings, Trophy, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { sortTasksByUserOrder, mapTaskData, Task } from "@/lib/engine";
+import { sortTasksByUserOrder, mapTaskData, Task, distributeSoftPool, identifyDecayedTasks } from "@/lib/engine";
 import { taskService } from '@/lib/taskService';
 import { projectService } from '@/lib/projectService';
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -20,12 +20,14 @@ import { db, ProjectCustomization } from "@/lib/db";
 import { toLocalISOString, isTodayLocal } from "@/lib/dateUtils";
 import { UserProfile } from "@/components/layout/UserProfile";
 import { ProjectSection } from "@/components/tasks/ProjectSection";
+import { useToastStore } from "@/store/toastStore";
 
 const EMPTY_ARRAY: any[] = [];
 
 export default function Home() {
   const { timeAvailable } = useUserStore();
   const { completeTask } = useTaskFulfillment();
+  const { addToast } = useToastStore();
   const queryClient = useQueryClient();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [projectFilters, setProjectFilters] = useState<string[]>([]);
@@ -319,6 +321,16 @@ export default function Home() {
     window.addEventListener('entropy:sync-complete', handleSync);
     return () => window.removeEventListener('entropy:sync-complete', handleSync);
   }, [queryClient]);
+  
+  // 1.5. Distribute Soft Pool tasks across their windows
+  const softDistribution = useMemo(() => {
+    return distributeSoftPool(allActive, todayStr);
+  }, [allActive, todayStr]);
+
+  // 1.6. Identify decayed tasks for maintenance
+  const decayedTaskIds = useMemo(() => {
+    return identifyDecayedTasks(allActive, todayStr).map(t => t.id);
+  }, [allActive, todayStr]);
 
   // 1. Basic Filters (Project + Time)
   const memoizedDisplayTasks = useMemo(() => {
@@ -359,8 +371,16 @@ export default function Home() {
         return isPlannedOnSelected || isDueTodayOrOverdue || isCarriedForward;
       }
       
-    // If selected date is future, only show what's planned for that specific day
-      return isPlannedOnSelected;
+      // If selected date is future, only show what's planned for that specific day
+      if (selectedDate > todayStr) {
+        return isPlannedOnSelected;
+      }
+
+      // Check if task is suggested for this date by the engine
+      const suggestedTaskIds = softDistribution.get(selectedDate) || EMPTY_ARRAY;
+      const isSuggestedForSelected = suggestedTaskIds.includes(t.id);
+
+      return isPlannedOnSelected || isSuggestedForSelected;
     });
 
     // DO NOT include completed tasks here - they go in a separate section below
@@ -416,6 +436,24 @@ export default function Home() {
   useEffect(() => {
     setDisplayedTasks(sortTasksByUserOrder(memoizedDisplayTasks));
   }, [memoizedDisplayTasks]);
+
+  const handleUnplan = async (taskId: string) => {
+    await taskService.setPlannedDate(taskId, null);
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    addToast("Task removed from plan", 'success');
+  };
+
+  const handleRecommit = async (taskId: string) => {
+    await taskService.setPlannedDate(taskId, todayStr, 'on');
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    addToast("Task recommitted to today", 'success');
+  };
+
+  const handleReschedule = async (taskId: string, date: string | null, type: 'on' | 'before' = 'on') => {
+    await taskService.setPlannedDate(taskId, date, type);
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    addToast(`Task rescheduled to ${date}`, 'success');
+  };
 
   // Reorder handler: updates local state for smooth drag
   const handleReorder = useCallback((reorderedTasks: Task[]) => {
@@ -677,11 +715,15 @@ export default function Home() {
                           completedSubtasksCount={task.completedSubtasksCount}
                           projectColor={task.projectColor}
                           isPlanned={!isOverdue}
-                          onPlannedChange={isOverdue ? undefined : (next) => toggleCommitment(task.id, !!task.plannedDate?.startsWith(selectedDate), next)}
-                          onRecommit={isOverdue ? () => toggleCommitment(task.id, false, true) : undefined}
                           isCarriedForward={isOverdue}
                           isMissed={task.isMissed}
                           isCompleted={task.isCompleted}
+                          plannedDate={task.plannedDate}
+                          plannedDateType={task.plannedDateType}
+                          isDecayed={decayedTaskIds.includes(task.id)}
+                          onRecommit={() => handleRecommit(task.id)}
+                          onUnplan={() => handleUnplan(task.id)}
+                          onReschedule={(date, type) => handleReschedule(task.id, date, type)}
                         />
                       </ReorderableItem>
                     );

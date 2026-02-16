@@ -112,6 +112,8 @@ export function getTools(supabase: SupabaseClient, google: any) {
         description: z.string().optional(),
         state: z.enum(['Active', 'Waiting', 'Blocked', 'Done']).default('Active'),
         due_date: z.string().optional().describe('ISO timestamp or YYYY-MM-DD'),
+        planned_date: z.string().optional().describe('ISO timestamp or YYYY-MM-DD for the intended execution date'),
+        planned_date_type: z.enum(['on', 'before']).default('on').describe('"on" for exact date, "before" for a soft window up till that date'),
         est_duration_minutes: z.number().default(30),
         recurrence_interval_days: z.number().optional(),
         recurrence_type: z.enum(['completion', 'schedule']).default('completion'),
@@ -131,6 +133,8 @@ export function getTools(supabase: SupabaseClient, google: any) {
             description: taskData.description,
             state: taskData.state,
             due_date: sanitizedDueDate,
+            planned_date: taskData.planned_date,
+            planned_date_type: taskData.planned_date_type,
             est_duration_minutes: taskData.est_duration_minutes,
             recurrence_interval_days: taskData.recurrence_interval_days,
             recurrence_type: taskData.recurrence_type,
@@ -163,6 +167,8 @@ export function getTools(supabase: SupabaseClient, google: any) {
         state: z.enum(['Active', 'Waiting', 'Blocked', 'Done']).optional(),
         description: z.string().optional(),
         due_date: z.string().optional(),
+        planned_date: z.string().optional(),
+        planned_date_type: z.enum(['on', 'before']).optional(),
       }),
       execute: async ({ id, ...updates }: any) => {
         console.log(`[AI TOOLS] >> EXECUTE update_task:`, { id, updates });

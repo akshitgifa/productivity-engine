@@ -39,6 +39,7 @@ export interface Task {
   recurrence_interval_days?: number;
   recurrence_type?: 'completion' | 'schedule';
   planned_date?: string | null;
+  planned_date_type?: 'on' | 'before';
   sort_order: number;
   is_deleted?: boolean;
   last_touched_at: string;
@@ -154,9 +155,9 @@ export class EntropyDatabase extends Dexie {
       context_cards: 'id, user_id, project_id, is_deleted',
       sync_outbox: '++id, timestamp, retry_count'
     });
-    this.version(12).stores({
+    this.version(13).stores({
       projects: 'id, user_id, name, last_touched_at, is_deleted',
-      tasks: 'id, user_id, project_id, state, due_date, sort_order, is_deleted, planned_date',
+      tasks: 'id, user_id, project_id, state, due_date, sort_order, is_deleted, planned_date, planned_date_type',
       activity_logs: 'id, user_id, task_id, project_id',
       notes: 'id, user_id, project_id, task_id, sort_order, is_read, is_deleted',
       subtasks: 'id, user_id, task_id, is_deleted',

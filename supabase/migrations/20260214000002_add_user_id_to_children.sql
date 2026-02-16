@@ -11,9 +11,11 @@ update context_cards c set user_id = p.user_id from projects p where c.project_i
 
 -- Simplified RLS Policies
 drop policy if exists "Users can see subtasks of their tasks" on subtasks;
+drop policy if exists "Users can only see their own subtasks" on subtasks;
 create policy "Users can only see their own subtasks" on subtasks
   for all using (auth.uid() = user_id);
 
 drop policy if exists "Users can see context cards of their projects" on context_cards;
+drop policy if exists "Users can only see their own context cards" on context_cards;
 create policy "Users can only see their own context cards" on context_cards
   for all using (auth.uid() = user_id);

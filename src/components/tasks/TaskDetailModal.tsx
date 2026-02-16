@@ -34,6 +34,7 @@ import { formatDistanceToNow } from "date-fns";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import { ProjectSelector } from "@/components/ui/ProjectSelector";
 import { CustomDateTimePicker } from "@/components/ui/CustomDateTimePicker";
+import { format } from "date-fns";
 
 interface TaskDetailModalProps {
   task: Task;
@@ -444,6 +445,46 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
                         <option value="completion">From Completion</option>
                         <option value="schedule">From Schedule</option>
                     </select>
+                )}
+            </div>
+            
+            {/* Commitment / Reschedule Section */}
+            <div className="mt-4 pt-4 border-t border-border/5 space-y-2">
+                <div className="flex items-center gap-2 mb-2">
+                    <Calendar size={12} className="text-zinc-500" />
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Commitment Plan</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {[
+                        { label: "Today", value: new Date().toISOString().split('T')[0], type: 'on' as const },
+                        { label: "Tomorrow", value: new Date(Date.now() + 86400000).toISOString().split('T')[0], type: 'on' as const },
+                        { label: "Within 3 Days", value: new Date(Date.now() + 3*86400000).toISOString().split('T')[0], type: 'before' as const },
+                        { label: "Within 7 Days", value: new Date(Date.now() + 7*86400000).toISOString().split('T')[0], type: 'before' as const },
+                        { label: "No Plan", value: null, type: 'on' as const },
+                    ].map((opt) => (
+                        <button
+                            key={opt.label}
+                            type="button"
+                            onClick={() => {
+                                taskService.setPlannedDate(task.id, opt.value, opt.type).then(() => {
+                                    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+                                });
+                            }}
+                            className={cn(
+                                "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border",
+                                (task.plannedDate === opt.value && task.plannedDateType === opt.type) || (!task.plannedDate && opt.value === null)
+                                    ? "bg-primary/20 border-primary/30 text-primary"
+                                    : "bg-void border-white/5 text-zinc-600 hover:text-zinc-400"
+                            )}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+                {task.plannedDate && (
+                    <p className="text-[9px] font-medium text-zinc-500 italic mt-1 ml-1">
+                        Currently {task.plannedDateType === 'before' ? `suggested before ${format(new Date(task.plannedDate), "MMM d")}` : `committed to ${format(new Date(task.plannedDate), "MMM d")}`}
+                    </p>
                 )}
             </div>
           </div>

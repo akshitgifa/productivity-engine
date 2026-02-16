@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { cn, formatTimeRemaining } from "@/lib/utils";
 import { hexToRgba } from "@/lib/colors";
-import { RotateCcw, Trash2, Check, Maximize2, AlertCircle, Calendar } from "lucide-react";
-import { motion, useMotionValue, animate } from "framer-motion";
+import { RotateCcw, Trash2, Check, Maximize2, AlertCircle, Calendar, MoreHorizontal, CalendarX, Sparkles } from "lucide-react";
+import { motion, useMotionValue, animate, AnimatePresence } from "framer-motion";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface FocusCardProps {
@@ -26,6 +26,11 @@ interface FocusCardProps {
   isCarriedForward?: boolean;
   isMissed?: boolean;
   isCompleted?: boolean;
+  plannedDate?: string;
+  plannedDateType?: 'on' | 'before';
+  isDecayed?: boolean;
+  onUnplan?: () => void;
+  onReschedule?: (date: string | null, type?: 'on' | 'before') => void;
   // Drag state from ReorderableItem (vertical)
   isDragging?: boolean;
 }
@@ -50,9 +55,15 @@ export function FocusCard({
   isCarriedForward,
   isMissed,
   isCompleted,
-  isDragging
+  isDragging,
+  plannedDate,
+  plannedDateType,
+  isDecayed,
+  onUnplan,
+  onReschedule
 }: FocusCardProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const x = useMotionValue(0);
 
   const handleAction = (e: React.MouseEvent, action?: () => void) => {
@@ -104,6 +115,14 @@ export function FocusCard({
           <span className="text-[10px] font-bold text-zinc-500 bg-void/50 px-2 py-0.5 rounded-full border border-border/30">
             {duration}
           </span>
+          {plannedDateType === 'before' && plannedDate && (
+             <span className="text-[10px] font-bold text-cyan-500/80 bg-cyan-500/5 px-2 py-0.5 rounded-full border border-cyan-500/20">
+               Within {(() => {
+                 const diff = Math.ceil((new Date(plannedDate).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24));
+                 return diff > 0 ? diff : 0;
+               })()} days
+             </span>
+          )}
           {!isMobile && onUndo && !isCompleted && !isMissed && (
             <button 
               onClick={(e) => { e.stopPropagation(); onUndo(); }}
@@ -194,76 +213,216 @@ export function FocusCard({
   );
 
   return (
-    <div className="relative overflow-hidden rounded-2xl group bg-void shadow-inner">
-      {/* Action Tray (Mobile Swipe) */}
-      <div className="absolute inset-0 flex justify-end items-center gap-2 pr-4">
-        <button
-          onClick={(e) => handleAction(e, onDelete)}
-          className="w-12 h-12 flex items-center justify-center rounded-xl bg-rose-500/20 text-rose-500 hover:bg-rose-500/40 transition-colors"
-        >
-          <Trash2 size={20} />
-        </button>
-        {isCarriedForward && onRecommit && (
-          <button
-            onClick={(e) => handleAction(e, onRecommit)}
-            className="w-12 h-12 flex items-center justify-center rounded-xl bg-amber-500/20 text-amber-500 hover:bg-amber-500/40 transition-colors"
-          >
-            <Calendar size={20} />
-          </button>
-        )}
-        {!isCompleted && !isMissed && onComplete && (
-          <button
-            onClick={(e) => handleAction(e, onComplete)}
-            className="w-12 h-12 flex items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/40 transition-colors"
-          >
-            <Check size={20} />
-          </button>
-        )}
-      </div>
+    <div className="relative group">
+      {/* Quick Reschedule Menu (Absolute Overlay) */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <>
+            {/* Click-away backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[90] bg-transparent cursor-default"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsMenuOpen(false);
+                animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+              }}
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 10 }}
+              className="absolute bottom-[calc(100%+8px)] right-4 z-[100] bg-[#1a1a20] border border-white/10 rounded-2xl p-1.5 shadow-2xl min-w-[200px] pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-col gap-1">
+                <div className="px-2 py-1.5 mb-1 border-b border-white/5">
+                  <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Quick Reschedule</span>
+                </div>
 
-      <motion.div
-        drag={isMobile && !isDragging ? "x" : false}
-        dragDirectionLock
-        dragConstraints={{ left: -180, right: 0 }}
-        dragElastic={0.1}
-        onDragEnd={onDragEnd}
-        onClick={() => {
-          if (!isMissed && !isCompleted) onClick?.();
-        }}
-        className={cn(
-          "relative border rounded-2xl cursor-pointer will-change-transform z-10",
-          "bg-[#0f0f12]", // Strictly opaque color
-          "transition-[background-color,border-color,opacity,box-shadow,filter] duration-200",
-          (isMissed || isCompleted) ? "py-2.5 px-3.5" : "py-3 px-4 md:py-3.5 md:px-4.5",
-          isActive ? "border-transparent shadow-[0_0_30px_-10px_rgba(0,0,0,0.5)] bg-[#15151a]" : "border-transparent border-zinc-800",
-          !isMobile && !isDragging && "group-hover:border-zinc-700"
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setIsMenuOpen(false);
+                    animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+                    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                    onReschedule?.(tomorrow, 'on');
+                  }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/5 text-zinc-300 hover:text-white transition-all text-left group/item"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 group-hover/item:border-primary/40">
+                    <Calendar size={12} className="text-primary" />
+                  </div>
+                  <span className="text-[11px] font-bold">Tomorrow</span>
+                </button>
+
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setIsMenuOpen(false);
+                    animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+                    const date = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0];
+                    onReschedule?.(date, 'before');
+                  }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/5 text-zinc-300 hover:text-white transition-all text-left group/item"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 group-hover/item:border-cyan-400/40">
+                    <Sparkles size={12} className="text-cyan-400" />
+                  </div>
+                  <span className="text-[11px] font-bold">Within 3 Days</span>
+                </button>
+
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setIsMenuOpen(false);
+                    animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+                    const date = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+                    onReschedule?.(date, 'before');
+                  }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/5 text-zinc-300 hover:text-white transition-all text-left group/item"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover/item:border-indigo-400/40">
+                    <Sparkles size={12} className="text-indigo-400" />
+                  </div>
+                  <span className="text-[11px] font-bold">Within 7 Days</span>
+                </button>
+
+                {onUnplan && (
+                  <button 
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      onUnplan(); 
+                      setIsMenuOpen(false);
+                      animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+                    }}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-rose-500/10 text-zinc-500 hover:text-rose-500 transition-all text-left group/item mt-1 border-t border-white/5 pt-2"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-rose-500/5 flex items-center justify-center border border-rose-500/10 group-hover/item:border-rose-500/20">
+                      <CalendarX size={12} />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Remove Plan</span>
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </>
         )}
-        style={{ 
-          x,
-          backgroundColor: '#0f0f12', // Solid base to prevent any transparency
-          backgroundImage: isActive 
-            ? `linear-gradient(135deg, ${hexToRgba(projectColor || '#facc15', 0.15)} 0%, #0f0f12 100%)` 
-            : `linear-gradient(135deg, ${hexToRgba(projectColor || '#facc15', 0.08)} 0%, #0f0f12 100%)`,
-          borderColor: isActive && projectColor ? `${projectColor}22` : projectColor ? `${projectColor}15` : undefined,
-          boxShadow: isActive && projectColor ? `0 0 40px -15px ${hexToRgba(projectColor, 0.2)}` : undefined
-        }}
-      >
-        <div className={cn(
-          "w-full h-full transition-opacity duration-300",
-          isMissed ? "opacity-40" : isCompleted ? "opacity-80" : "opacity-100"
-        )}>
-          {/* Left Accent Bar */}
-          <div 
-            className="absolute left-0 w-1 rounded-r-full transition-[height,top,bottom,background-color] duration-300"
-            style={{ 
-              top: (isMissed || isCompleted) ? '12px' : '16px',
-              bottom: (isMissed || isCompleted) ? '12px' : '16px',
-              backgroundColor: isCompleted ? '#10b981' : isMissed ? '#27272a' : (projectColor || '#facc15')
-            }}
-          />
-          {cardContent}
+      </AnimatePresence>
+
+      <div className="relative overflow-hidden rounded-2xl group bg-void shadow-inner">
+        {/* Action Tray (Mobile Swipe) */}
+        <div className="absolute inset-0 flex justify-end items-center gap-2 pr-4">
+          {/* Button 3: More (Quick Reschedule) */}
+          {!isCompleted && !isMissed && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const nextState = !isMenuOpen;
+                setIsMenuOpen(nextState);
+                if (!nextState) {
+                  animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+                }
+              }}
+              className={cn(
+                 "w-12 h-12 flex items-center justify-center rounded-xl transition-all",
+                 isMenuOpen ? "bg-primary text-void scale-110" : "bg-zinc-800/40 text-zinc-400 hover:bg-zinc-800"
+              )}
+            >
+              <MoreHorizontal size={20} />
+            </button>
+          )}
+
+          {/* Button 2: Context-sensitive action */}
+          {isDecayed && onRecommit ? (
+            <button
+              onClick={(e) => handleAction(e, onRecommit)}
+              className="w-12 h-12 flex items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
+              title="Recommit to Today"
+            >
+              <RotateCcw size={18} />
+            </button>
+          ) : !isCompleted && !isMissed && onUnplan ? (
+            <button
+              onClick={(e) => handleAction(e, onUnplan)}
+              className="w-12 h-12 flex items-center justify-center rounded-xl bg-zinc-800/30 text-zinc-500 border border-zinc-800/50 hover:bg-zinc-800 transition-colors"
+              title="Remove Plan"
+            >
+              <CalendarX size={18} />
+            </button>
+          ) : null}
+
+          {/* Button 1: Complete */}
+          {!isCompleted && !isMissed && onComplete && (
+            <button
+              onClick={(e) => handleAction(e, onComplete)}
+              className="w-12 h-12 flex items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/40 transition-colors"
+            >
+              <Check size={20} />
+            </button>
+          )}
         </div>
-      </motion.div>
+
+        <motion.div
+          drag={isMobile && !isDragging ? "x" : false}
+          dragDirectionLock
+          dragConstraints={{ left: -180, right: 0 }}
+          dragElastic={0.1}
+          onDragEnd={onDragEnd}
+          onClick={() => {
+            if (!isMissed && !isCompleted) onClick?.();
+          }}
+          className={cn(
+            "relative border rounded-2xl cursor-pointer will-change-transform z-10",
+            "bg-[#0f0f12]", // Strictly opaque color
+            "transition-[background-color,border-color,opacity,box-shadow,filter] duration-200",
+            (isMissed || isCompleted) ? "py-2.5 px-3.5" : "py-3 px-4 md:py-3.5 md:px-4.5",
+            isActive ? "border-transparent shadow-[0_0_30px_-10px_rgba(0,0,0,0.5)] bg-[#15151a]" : "border-transparent border-zinc-800",
+            !isMobile && !isDragging && "group-hover:border-zinc-700"
+          )}
+          style={{ 
+            x,
+            backgroundColor: '#0f0f12', // Solid base to prevent any transparency
+            backgroundImage: isActive 
+              ? `linear-gradient(135deg, ${hexToRgba(projectColor || '#facc15', 0.15)} 0%, #0f0f12 100%)` 
+              : `linear-gradient(135deg, ${hexToRgba(projectColor || '#facc15', 0.08)} 0%, #0f0f12 100%)`,
+            borderColor: isActive && projectColor ? `${projectColor}22` : projectColor ? `${projectColor}15` : undefined,
+            boxShadow: isActive && projectColor ? `0 0 40px -15px ${hexToRgba(projectColor, 0.2)}` : undefined
+          }}
+        >
+          <div className={cn(
+            "w-full h-full transition-opacity duration-300",
+            isMissed ? "opacity-40" : isCompleted ? "opacity-80" : "opacity-100"
+          )}>
+            {/* Left Accent Bar */}
+            <motion.div 
+              className={cn(
+                "absolute left-0 w-1 rounded-r-full transition-[height,top,bottom,background-color] duration-300",
+                plannedDateType === 'before' && !isCompleted && !isMissed && "border-r-2 border-dashed border-cyan-500 bg-transparent w-0"
+              )}
+              animate={isDecayed && !isCompleted && !isMissed ? {
+                opacity: [0.4, 1, 0.4],
+                scaleY: [1, 1.05, 1],
+                x: [0, 1, 0]
+              } : {}}
+              transition={isDecayed ? {
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
+              } : {}}
+              style={{ 
+                top: (isMissed || isCompleted) ? '12px' : '16px',
+                bottom: (isMissed || isCompleted) ? '12px' : '16px',
+                backgroundColor: isCompleted ? '#10b981' : isMissed ? '#27272a' : (projectColor || '#facc15')
+              }}
+            />
+            {cardContent}
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }

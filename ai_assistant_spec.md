@@ -15,7 +15,7 @@ The AI Assistant is an active intelligence partner with full read/write access t
 ### Task Management
 | Tool               | Description                                                               |
 | ------------------ | ------------------------------------------------------------------------- |
-| `create_task`      | Create a task with title, project, deadline, energy tag, duration         |
+| `create_task`      | Create a task with title, project, deadline/planned_date, duration        |
 | `update_task`      | Update any task field (applies business rules via `applyTaskUpdateRules`) |
 | `delete_task`      | Delete a task and associated activity logs                                |
 | `complete_task`    | Mark done, log activity, rejuvenate project health                        |
@@ -56,8 +56,8 @@ The AI Assistant is an active intelligence partner with full read/write access t
 ### Quick Capture Flow
 1. User taps mic → waveform visualization
 2. Audio sent to Gemini for transcription
-3. Transcribed text parsed into structured task (project, duration, energy tag, deadline)
-4. Confirmation UI with shorthand override chips (EOD, Tmrw, +1h)
+3. Transcribed text parsed into structured task (project, duration, deadline/planned_date)
+4. Confirmation UI with shorthand override chips (EOD, Tmrw, +1, +3d, +7d)
 
 ### Chat Voice Input
 Audio messages in the chat are transcribed and processed as multimodal input alongside text context.
@@ -68,4 +68,5 @@ Audio messages in the chat are transcribed and processed as multimodal input alo
 - Setting a deadline resets `sort_order` to 0 → task enters deadline-sorted pool
 - All task updates auto-stamp `updated_at`
 - **Soft-Delete**: Deletions are non-destructive and marked with `is_deleted` to allow for Undo logic.
+- **Soft Windows**: Tasks scheduled with `planned_date_type: 'before'` are automatically distributed across available agenda windows to prevent overloading a single day.
 - AI tool `update_task` imports `applyTaskUpdateRules` for server-side consistency

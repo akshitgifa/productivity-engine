@@ -42,12 +42,13 @@ Mutations follow a **Soft-Delete** pattern:
 - **Undo Toast**: A 5-second window appears after any deletion, allowing instant restoration.
 - **Local Archival**: Soft-deleted records older than 30 days are automatically purged from local storage to maintain performance.
 
-### Deadline-Aware Sorting
+### Deadline-Aware Sorting & Soft Windows
 Tasks are sorted via **`sortTasksByUserOrder()`** in `src/lib/engine.ts`:
 1. **Deadlined tasks** float above non-deadlined tasks.
-2. Among deadlined: manual drag order (`sort_order > 0`) overrides deadline sort; unranked tasks sort by soonest deadline.
-3. **Non-deadlined tasks** sort by manual drag order.
-4. **Urgency score** serves as the final tiebreaker.
+2. **Soft Window distribution**: Tasks planned "Before [Date]" are distributed into available gaps in the agenda before their soft deadline.
+3. Among deadlined: manual drag order (`sort_order > 0`) overrides deadline sort; unranked tasks sort by soonest deadline.
+4. **Non-deadlined tasks** sort by manual drag order.
+5. **Urgency score** serves as the final tiebreaker.
 
 Setting a deadline resets `sort_order` to 0 (enters deadline pool). Dragging assigns an explicit order that persists.
 
@@ -76,6 +77,9 @@ Setting a deadline resets `sort_order` to 0 (enters deadline pool). Dragging ass
 - **Master List**: Unified view of all fragments in the system with **viewMode persistence** (localStorage).
 - **Creative Customization**: Real-time theme editing with live preview and **Unified DraggableDrawer** styling.
 - **Mobile Performance**: **Velocity-sensitive DraggableDrawer** with projection-based snapping and portal-based layering (z-10000).
+- **Soft Windows**: Support for "Before X Days" flexible planning that spreads logic across the agenda.
+- **Dynamic Decay**: Visual "pulsing" for tasks overdue by 3+ days to signal entropy.
+- **Refined Swipe UX**: Context-aware swipe actions (Recommit, Complete, Quick Reschedule) with a lightweight popover triaging menu.
 
 ---
 

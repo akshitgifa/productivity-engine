@@ -80,14 +80,17 @@ Execution is divided into testable phases. **USER MUST TEST AFTER EACH PHASE.**
 
 ---
 
-## Phase 3: Soft Windows & Dynamic Decay (P1)
+## Phase 3: Soft Windows & Dynamic Decay (P1) ✅
 **Goal:** Flexible non-deadline scheduling and automatic maintenance of the backlog.
 
 ### Tasks
-- [ ] **3.1 Schema:** Update tasks table with `soft_window_days` and `auto_scheduled_date`.
-- [ ] **3.2 Engine:** Implement "Circadian Logic" in `engine.ts` to distribute soft-pool tasks into the agenda gaps.
-- [ ] **3.3 UX:** Add "Within X Days" selector to Quick Capture and Task Detail.
-- [ ] **3.4 Decay:** Implement surfacing logic for rotting tasks (untouched for >14 days).
+- [x] **3.1 Schema:** Update tasks table with `planned_date` and `planned_date_type` (on/before).
+- [x] **3.2 Engine:** Implement "Distribution Logic" in `engine.ts` to spread "before" tasks across available agenda windows.
+- [x] **3.3 UX:** Add "Within X Days" selector to Quick Capture and Task Detail.
+- [x] **3.4 Decay:** Implement 3-day overdue "pulse" animation and context-aware swipe actions (Recommit/Unplan).
+- [x] **3.5 UX:** Build lightweight "Quick Reschedule" popover menu for rapid mobile triage.
+
+**TESTED ✅:** User verified Soft Windows distribution, pulsing decay animations, and the new swipe-to-reschedule flow.
 
 ---
 

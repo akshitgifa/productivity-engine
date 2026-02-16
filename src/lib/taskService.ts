@@ -31,8 +31,9 @@ export function applyTaskUpdateRules(updates: Record<string, any>): Record<strin
 
   // Rule: Setting a planned_date stamps it appropriately
   if ('planned_date' in result && result.planned_date) {
-    // If setting to today or future, ensure we keep it
-    // Logic can be expanded here if needed
+    if (!result.planned_date_type) {
+      result.planned_date_type = 'on';
+    }
   }
 
   // Always stamp updated_at
@@ -124,9 +125,48 @@ export const taskService = {
 
   /**
    * Set or unset the planned date (Daily Agenda commitment).
+   * Type can be 'on' (hard commitment) or 'before' (flexible window).
    */
-  async setPlannedDate(taskId: string, date: string | null): Promise<void> {
-    const update = { planned_date: date, updated_at: new Date().toISOString() };
+  async setPlannedDate(taskId: string, date: string | null, type: 'on' | 'before' = 'on'): Promise<void> {
+    const update = { 
+      planned_date: date, 
+      planned_date_type: date ? type : undefined,
+      updated_at: new Date().toISOString(),
+      last_touched_at: new Date().toISOString() // Touching it resets decay
+    };
+    await db.tasks.update(taskId, update);
+    await db.recordAction('tasks', 'update', { id: taskId, ...update });
+    processOutbox().catch(() => {});
+  },
+
+  /**
+   * Resets the touch date of a task to keep it from decaying.
+   * Typically used during "Sweep" triage.
+   */
+  async keep(taskId: string, windowDays: number = 3): Promise<void> {
+    const now = new Date();
+    const plannedDate = new Date(now.getTime() + windowDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const update = {
+      last_touched_at: now.toISOString(),
+      planned_date: plannedDate,
+      planned_date_type: 'before' as const,
+      updated_at: now.toISOString()
+    };
+    await db.tasks.update(taskId, update);
+    await db.recordAction('tasks', 'update', { id: taskId, ...update });
+    processOutbox().catch(() => {});
+  },
+
+  /**
+   * Archives a task by marking it as Done.
+   */
+  async archive(taskId: string): Promise<void> {
+    const now = new Date().toISOString();
+    const update = { 
+      state: 'Done' as const, 
+      updated_at: now,
+      last_touched_at: now
+    };
     await db.tasks.update(taskId, update);
     await db.recordAction('tasks', 'update', { id: taskId, ...update });
     processOutbox().catch(() => {});

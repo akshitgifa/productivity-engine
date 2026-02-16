@@ -62,6 +62,7 @@ export function QuickCaptureDrawer({
     energy: "Normal",
     dueDate: "",
     plannedDate: toLocalISOString(), // Default to today
+    plannedDateType: 'on' as 'on' | 'before',
     recurrence: "",
     recurrenceType: "completion"
   });
@@ -131,6 +132,7 @@ export function QuickCaptureDrawer({
         recurrence_type: result.recurrenceType || 'completion',
         due_date: result.dueDate || null,
         planned_date: result.plannedDate || null,
+        planned_date_type: result.plannedDateType || 'on',
         sort_order: 0,
         state: 'Active' as const,
         last_touched_at: new Date().toISOString(),
@@ -166,6 +168,7 @@ export function QuickCaptureDrawer({
       energy: "Normal",
       dueDate: "",
       plannedDate: toLocalISOString(),
+      plannedDateType: 'on',
       recurrence: "",
       recurrenceType: "completion"
     });
@@ -237,6 +240,7 @@ export function QuickCaptureDrawer({
         energy: data.energy || "Normal",
         dueDate: data.dueDate ? new Date(new Date(data.dueDate).getTime() - new Date(data.dueDate).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
         plannedDate: data.plannedDate || toLocalISOString(),
+        plannedDateType: data.plannedDateType || 'on',
         recurrence: data.recurrence || "",
         recurrenceType: data.recurrenceType || "completion"
       });
@@ -289,6 +293,7 @@ export function QuickCaptureDrawer({
       projectId: manualData.projectId === "NONE" ? undefined : manualData.projectId,
       dueDate: manualData.dueDate || undefined,
       plannedDate: manualData.plannedDate || undefined,
+      plannedDateType: manualData.plannedDateType,
       recurrence: manualData.recurrence === "" ? null : parseInt(manualData.recurrence),
       recurrenceType: manualData.recurrenceType
     });
@@ -458,10 +463,10 @@ export function QuickCaptureDrawer({
                     <button
                       key={chip.label}
                       type="button"
-                      onClick={() => setManualData({ ...manualData, plannedDate: chip.value || "" })}
+                      onClick={() => setManualData({ ...manualData, plannedDate: chip.value || "", plannedDateType: 'on' })}
                       className={cn(
                         "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
-                        (manualData.plannedDate === chip.value || (!manualData.plannedDate && chip.value === null))
+                        ((manualData.plannedDate === chip.value && manualData.plannedDateType === 'on') || (!manualData.plannedDate && chip.value === null))
                           ? "bg-primary/20 border-primary/30 text-primary"
                           : "bg-void border-white/5 text-zinc-500 hover:text-zinc-300"
                       )}
@@ -469,12 +474,39 @@ export function QuickCaptureDrawer({
                       {chip.label}
                     </button>
                   ))}
+                  
+                  {/* Flexible Option */}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (manualData.plannedDateType === 'before') {
+                          setManualData({ ...manualData, plannedDateType: 'on', plannedDate: toLocalISOString() });
+                        } else {
+                          setManualData({ ...manualData, plannedDateType: 'before', plannedDate: toLocalISOString(addDays(new Date(), 3)) });
+                        }
+                      }}
+                      className={cn(
+                        "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
+                        manualData.plannedDateType === 'before'
+                          ? "bg-cyan-500/20 border-cyan-500/30 text-cyan-400"
+                          : "bg-void border-white/5 text-zinc-500 hover:text-cyan-400/60"
+                      )}
+                    >
+                      Flexible {manualData.plannedDateType === 'before' ? "▾" : ""}
+                    </button>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => setIsFormExpanded(true)}
+                    onClick={() => {
+                      setIsFormExpanded(true);
+                      setManualData({ ...manualData, plannedDateType: 'on' });
+                    }}
                     className={cn(
                       "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
                       manualData.plannedDate && 
+                      manualData.plannedDateType === 'on' &&
                       manualData.plannedDate !== toLocalISOString() && 
                       manualData.plannedDate !== toLocalISOString(addDays(new Date(), 1))
                         ? "bg-primary/20 border-primary/30 text-primary"
@@ -482,6 +514,7 @@ export function QuickCaptureDrawer({
                     )}
                   >
                     {manualData.plannedDate && 
+                     manualData.plannedDateType === 'on' &&
                      manualData.plannedDate !== toLocalISOString() && 
                      manualData.plannedDate !== toLocalISOString(addDays(new Date(), 1))
                       ? format(new Date(manualData.plannedDate), "MMM d")
@@ -489,6 +522,36 @@ export function QuickCaptureDrawer({
                   </button>
                 </div>
               </div>
+
+              {/* Flexible Sub-options */}
+              {manualData.plannedDateType === 'before' && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="flex gap-2 overflow-x-auto no-scrollbar pb-1"
+                >
+                  {[
+                    { label: "3 Days", days: 3 },
+                    { label: "5 Days", days: 5 },
+                    { label: "7 Days", days: 7 },
+                    { label: "14 Days", days: 14 },
+                  ].map((opt) => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setManualData({ ...manualData, plannedDate: toLocalISOString(addDays(new Date(), opt.days)), plannedDateType: 'before' })}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border",
+                        manualData.plannedDate === toLocalISOString(addDays(new Date(), opt.days))
+                          ? "bg-cyan-500 text-void border-cyan-500"
+                          : "bg-void border-cyan-500/20 text-cyan-500/60 hover:text-cyan-400"
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
 
               {isFormExpanded && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
