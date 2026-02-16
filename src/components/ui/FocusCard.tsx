@@ -71,7 +71,7 @@ export function FocusCard({
 
   const cardContent = (
     <div className="flex flex-col h-full pointer-events-none">
-      <div className={cn("flex justify-between items-start", (isMissed || isCompleted) ? "mb-1.5" : "mb-3")}>
+      <div className={cn("flex justify-between items-start", (isMissed || isCompleted) ? "mb-1" : "mb-2")}>
         <div className="flex items-center gap-2">
           {isCarriedForward && (
              <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary-rgb),0.6)]" />
@@ -118,7 +118,7 @@ export function FocusCard({
       
       <h3 className={cn(
         "font-semibold tracking-tight leading-tight",
-        (isMissed || isCompleted) ? "text-base mb-0" : "text-lg mb-1",
+        (isMissed || isCompleted) ? "text-base mb-0" : "text-lg mb-0.5",
         isActive ? "text-white" : "text-zinc-300",
         isCompleted && "text-zinc-400 line-through decoration-[3.5px] decoration-primary opacity-100"
       )}>
@@ -234,7 +234,7 @@ export function FocusCard({
           "relative border rounded-2xl cursor-pointer will-change-transform z-10",
           "bg-[#0f0f12]", // Strictly opaque color
           "transition-[background-color,border-color,opacity,box-shadow,filter] duration-200",
-          (isMissed || isCompleted) ? "p-3.5" : "p-4 md:p-4.5",
+          (isMissed || isCompleted) ? "py-2.5 px-3.5" : "py-3 px-4 md:py-3.5 md:px-4.5",
           isActive ? "border-transparent shadow-[0_0_30px_-10px_rgba(0,0,0,0.5)] bg-[#15151a]" : "border-transparent border-zinc-800",
           !isMobile && !isDragging && "group-hover:border-zinc-700"
         )}
