@@ -164,7 +164,20 @@ export default function Home() {
       const missed = await Promise.all(allTasks.filter(t => {
         if (t.is_deleted) return false;
         let taskPlannedDay = t.planned_date?.includes('T') ? toLocalISOString(new Date(t.planned_date)) : t.planned_date;
-        return taskPlannedDay === selectedDate && !dayLogs.some(l => l.task_id === t.id);
+        
+        // Task must have a planned date that is on or before the selected historical date
+        const wasPlannedByThen = taskPlannedDay && taskPlannedDay <= selectedDate;
+        if (!wasPlannedByThen) return false;
+
+        // Check if it was completed ON this day (it will be in the 'completed' list already)
+        const completedOnThisDay = dayLogs.some(l => l.task_id === t.id);
+        if (completedOnThisDay) return false;
+
+        // Check if it was completed BEFORE this day
+        const completedBefore = logs.some(l => l.task_id === t.id && l.completed_at.split('T')[0] < selectedDate);
+        if (completedBefore) return false;
+
+        return true;
       }).map(async (t) => {
         const projects = t.project_id ? await db.projects.get(t.project_id) : null;
         return mapTaskData({ 
