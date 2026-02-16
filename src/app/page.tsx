@@ -359,17 +359,13 @@ export default function Home() {
         return isPlannedOnSelected || isDueTodayOrOverdue || isCarriedForward;
       }
       
-      // If selected date is future, only show what's planned for that specific day
+    // If selected date is future, only show what's planned for that specific day
       return isPlannedOnSelected;
     });
 
-    if (viewMode === 'Today' && selectedDate === todayStr) {
-      const doneToday = completedToday;
-      return [...filteredResults, ...doneToday];
-    }
-
+    // DO NOT include completed tasks here - they go in a separate section below
     return filteredResults;
-  }, [allActive, projectFilters, timeAvailable, viewMode, todayStr, selectedDate, retrospectiveTasks, completedToday]);
+  }, [allActive, projectFilters, timeAvailable, viewMode, todayStr, selectedDate, retrospectiveTasks]);
 
   // Group tasks by project for Master List
   const groupedMasterTasks = useMemo(() => {
@@ -644,49 +640,128 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          ) : viewMode === 'Today' && displayedTasks.length > 0 ? (
-            <Reorder.Group
-              axis="y"
-              values={displayedTasks}
-              onReorder={handleReorder}
-              className="flex flex-col gap-4"
-              as="div"
-            >
-              {displayedTasks.map((task) => (
-                  <ReorderableItem
-                    key={task.id}
-                    value={task}
-                    onDragEnd={persistReorder}
-                  >
-                  <FocusCard
-                    title={task.title}
-                    project={task.projectName}
-                    tier={task.projectTier as any}
-                    duration={task.durationMinutes < 60 ? `${task.durationMinutes}m` : `${Math.floor(task.durationMinutes / 60)}h`}
-                    dueDate={task.dueDate}
-                    isActive={true}
-                    onComplete={() => handleComplete(task)}
-                    onDelete={() => handleDelete(task.id)}
-                    onClick={() => setSelectedTaskId(task.id)}
-                    subtasksCount={task.subtasksCount}
-                    completedSubtasksCount={task.completedSubtasksCount}
-                    projectColor={task.projectColor}
-                    isPlanned={(() => {
-                      let taskPlannedDay = task.plannedDate?.includes('T') ? toLocalISOString(new Date(task.plannedDate)) : task.plannedDate;
-                      return taskPlannedDay === selectedDate;
-                    })()}
-                    onPlannedChange={(next) => toggleCommitment(task.id, !!task.plannedDate?.startsWith(selectedDate), next)}
-                    isCarriedForward={(() => {
+          ) : viewMode === 'Today' ? (
+            <>
+              {displayedTasks.length > 0 ? (
+                <Reorder.Group
+                  axis="y"
+                  values={displayedTasks}
+                  onReorder={handleReorder}
+                  className="flex flex-col gap-4"
+                  as="div"
+                >
+                  {displayedTasks.map((task) => {
+                    const isOverdue = (() => {
                       if (selectedDate !== todayStr) return false;
-                      let taskPlannedDay = task.plannedDate?.includes('T') ? toLocalISOString(new Date(task.plannedDate)) : task.plannedDate;
+                      const taskPlannedDay = task.plannedDate?.includes('T') ? toLocalISOString(new Date(task.plannedDate)) : task.plannedDate;
                       return !!(taskPlannedDay && taskPlannedDay < todayStr);
-                    })()}
-                    isMissed={task.isMissed}
-                    isCompleted={task.isCompleted}
-                  />
-                </ReorderableItem>
-              ))}
-            </Reorder.Group>
+                    })();
+
+                    return (
+                      <ReorderableItem
+                        key={task.id}
+                        value={task}
+                        onDragEnd={persistReorder}
+                      >
+                        <FocusCard
+                          title={task.title}
+                          project={task.projectName}
+                          tier={task.projectTier as any}
+                          duration={task.durationMinutes < 60 ? `${task.durationMinutes}m` : `${Math.floor(task.durationMinutes / 60)}h`}
+                          dueDate={task.dueDate}
+                          isActive={true}
+                          onComplete={() => handleComplete(task)}
+                          onDelete={() => handleDelete(task.id)}
+                          onClick={() => setSelectedTaskId(task.id)}
+                          subtasksCount={task.subtasksCount}
+                          completedSubtasksCount={task.completedSubtasksCount}
+                          projectColor={task.projectColor}
+                          isPlanned={!isOverdue}
+                          onPlannedChange={isOverdue ? undefined : (next) => toggleCommitment(task.id, !!task.plannedDate?.startsWith(selectedDate), next)}
+                          onRecommit={isOverdue ? () => toggleCommitment(task.id, false, true) : undefined}
+                          isCarriedForward={isOverdue}
+                          isMissed={task.isMissed}
+                          isCompleted={task.isCompleted}
+                        />
+                      </ReorderableItem>
+                    );
+                  })}
+                </Reorder.Group>
+              ) : completedToday.length === 0 ? (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                  <div className="text-center py-24 border border-dashed border-border/30 rounded-[3rem] bg-surface/20">
+                    <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/20">
+                      <Share2 className="text-primary opacity-40" size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold text-white mb-2">Your Today is empty</h3>
+                    <p className="text-zinc-500 text-xs font-medium max-w-[240px] mx-auto mb-8 uppercase tracking-widest leading-relaxed">
+                      The engine is ready. Pick your focus for a productive day.
+                    </p>
+                    <button 
+                      onClick={() => handleViewModeChange('Master')}
+                      className="px-8 py-4 bg-primary text-void rounded-[2rem] font-black text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all"
+                    >
+                      PLAN YOUR DAY
+                    </button>
+                  </div>
+
+                  {/* Recommendations Section */}
+                  <div className="space-y-4">
+                    <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.3em]">Top Picks from Engine</h3>
+                    <div className="grid grid-cols-1 gap-3">
+                      {memoizedDisplayTasks.slice(0, 3).map((task: Task) => (
+                        <div key={task.id} className="bg-surface/40 border border-border/10 rounded-2xl p-4 flex items-center justify-between group hover:border-primary/20 transition-all">
+                          <div className="flex items-center gap-4">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: task.projectColor || '#10b981' }} />
+                            <div>
+                              <p className="text-sm font-semibold text-zinc-200">{task.title}</p>
+                              <p className="text-[10px] font-bold text-zinc-600 uppercase mt-0.5">{task.projectName}</p>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => toggleCommitment(task.id, false, true)}
+                            className="w-10 h-10 rounded-xl border border-border/20 text-zinc-500 flex items-center justify-center hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
+                          >
+                            <span className="text-lg font-black">+</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {completedToday.length > 0 && (
+                <div className="mt-12 space-y-4">
+                  <h2 className="text-[11px] font-bold text-zinc-600 uppercase tracking-widest flex items-center gap-2 mb-4">
+                    Completed
+                  </h2>
+                  <div className="flex flex-col gap-4 opacity-60 hover:opacity-100 transition-opacity">
+                    {completedToday.map((task) => (
+                      <FocusCard
+                        key={task.id}
+                        title={task.title}
+                        project={task.projectName}
+                        tier={task.projectTier as any}
+                        duration={task.durationMinutes < 60 ? `${task.durationMinutes}m` : `${Math.floor(task.durationMinutes / 60)}h`}
+                        dueDate={task.dueDate}
+                        isActive={false}
+                        onComplete={() => handleComplete(task)}
+                        onDelete={() => handleDelete(task.id)}
+                        onClick={() => setSelectedTaskId(task.id)}
+                        subtasksCount={task.subtasksCount}
+                        completedSubtasksCount={task.completedSubtasksCount}
+                        projectColor={task.projectColor}
+                        isPlanned={selectedDate === todayStr}
+                        isCarriedForward={false}
+                        isMissed={task.isMissed}
+                        isCompleted={true}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           ) : viewMode === 'Master' && hasMounted && groupedMasterTasks.length > 0 ? (
             <div className="flex flex-wrap gap-10">
               {groupedMasterTasks.map(group => {
@@ -711,6 +786,9 @@ export default function Home() {
                       projectName={group.name}
                       tasks={group.tasks}
                       onTaskClick={(id) => setSelectedTaskId(id)}
+                      onCompleteTask={handleComplete}
+                      onDeleteTask={handleDelete}
+                      onCommitTask={(taskId) => toggleCommitment(taskId, false, true)}
                       customization={cust}
                       onApplyToAll={(c: Partial<ProjectCustomization>) => applyToAllMutation.mutate(c)}
                       onApplySizeToAll={(w, h) => applySizeToAllMutation.mutate({ w, h })}
@@ -718,48 +796,6 @@ export default function Home() {
                   </div>
                 );
               })}
-            </div>
-          ) : viewMode === 'Today' ? (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <div className="text-center py-24 border border-dashed border-border/30 rounded-[3rem] bg-surface/20">
-                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-primary/20">
-                  <Share2 className="text-primary opacity-40" size={32} />
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">Your Today is empty</h3>
-                <p className="text-zinc-500 text-xs font-medium max-w-[240px] mx-auto mb-8 uppercase tracking-widest leading-relaxed">
-                  The engine is ready. Pick your focus for a productive day.
-                </p>
-                <button 
-                  onClick={() => handleViewModeChange('Master')}
-                  className="px-8 py-4 bg-primary text-void rounded-[2rem] font-black text-[10px] tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all"
-                >
-                  PLAN YOUR DAY
-                </button>
-              </div>
-
-              {/* Recommendations Section */}
-              <div className="space-y-4">
-                <h3 className="text-[10px] font-bold text-zinc-600 uppercase tracking-[0.3em]">Top Picks from Engine</h3>
-                <div className="grid grid-cols-1 gap-3">
-                  {memoizedDisplayTasks.slice(0, 3).map((task: Task) => (
-                    <div key={task.id} className="bg-surface/40 border border-border/10 rounded-2xl p-4 flex items-center justify-between group hover:border-primary/20 transition-all">
-                      <div className="flex items-center gap-4">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: task.projectColor || '#10b981' }} />
-                        <div>
-                          <p className="text-sm font-semibold text-zinc-200">{task.title}</p>
-                          <p className="text-[10px] font-bold text-zinc-600 uppercase mt-0.5">{task.projectName}</p>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => toggleCommitment(task.id, false, true)}
-                        className="w-10 h-10 rounded-xl border border-border/20 text-zinc-500 flex items-center justify-center hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
-                      >
-                        <span className="text-lg font-black">+</span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           ) : (
             <div className="text-center py-24 border border-dashed border-border rounded-3xl text-zinc-600 text-[10px] font-bold uppercase tracking-widest bg-surface/30">

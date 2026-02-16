@@ -18,6 +18,9 @@ interface ProjectSectionProps {
   projectColor?: string;
   tasks: Task[];
   onTaskClick: (taskId: string) => void;
+  onCompleteTask?: (task: Task) => void;
+  onDeleteTask?: (taskId: string) => void;
+  onCommitTask?: (taskId: string) => void;
   customization?: ProjectCustomization;
   onApplyToAll?: (customization: Partial<ProjectCustomization>) => void;
   onApplySizeToAll?: (w: number, h: number) => void;
@@ -29,6 +32,9 @@ export function ProjectSection({
   projectColor,
   tasks,
   onTaskClick,
+  onCompleteTask,
+  onDeleteTask,
+  onCommitTask,
   customization,
   onApplyToAll,
   onApplySizeToAll
@@ -184,6 +190,11 @@ export function ProjectSection({
                 dueDate={task.dueDate}
                 projectColor={task.projectColor}
                 textColor={customization?.customStyles?.color}
+                isCompleted={task.isCompleted}
+                isPlanned={!!task.plannedDate}
+                onComplete={() => onCompleteTask?.(task)}
+                onDelete={() => onDeleteTask?.(task.id)}
+                onCommit={() => onCommitTask?.(task.id)}
                 onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   onTaskClick(task.id);

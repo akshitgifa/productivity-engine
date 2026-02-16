@@ -1,10 +1,9 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState } from "react";
 import { cn, formatTimeRemaining } from "@/lib/utils";
 import { hexToRgba } from "@/lib/colors";
-import { RotateCcw, Trash2, Check, Maximize2, AlertCircle } from "lucide-react";
-import { motion, useMotionValue } from "framer-motion";
+import { RotateCcw, Trash2, Check, Maximize2, AlertCircle, Calendar } from "lucide-react";
+import { motion, useMotionValue, animate } from "framer-motion";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { ActionBubbles, BUBBLE_POSITIONS } from "./ActionBubbles";
 
 interface FocusCardProps {
   title: string;
@@ -22,18 +21,14 @@ interface FocusCardProps {
   projectColor?: string;
   isPlanned?: boolean;
   onPlannedChange?: (isPlanned: boolean) => void;
+  onRecommit?: () => void;
   onInteractionChange?: (active: boolean) => void;
   isCarriedForward?: boolean;
   isMissed?: boolean;
   isCompleted?: boolean;
-  // Unified drag props
+  // Drag state from ReorderableItem (vertical)
   isDragging?: boolean;
-  dragOffset?: { x: number; y: number };
-  dragStartCenter?: { x: number; y: number } | null;
 }
-
-const BUBBLE_RADIUS = 250; // px — past this, bubbles dismiss
-const LONG_PRESS_MS = 350; // ms to activate bubbles
 
 export function FocusCard({ 
   title, 
@@ -44,72 +39,35 @@ export function FocusCard({
   onUndo,
   onDelete,
   onComplete,
+  onPlannedChange,
+  onRecommit,
   onClick,
   subtasksCount = 0,
   completedSubtasksCount = 0,
   dueDate,
   projectColor,
   isPlanned,
-  onPlannedChange,
-  onInteractionChange,
-  isDragging,
-  dragOffset,
-  dragStartCenter,
   isCarriedForward,
   isMissed,
-  isCompleted
+  isCompleted,
+  isDragging
 }: FocusCardProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
+  const x = useMotionValue(0);
 
-  // — Mobile bubble state (Now reactive) —
-  const [activeActionId, setActiveActionId] = useState<string | null>(null);
-  const lastIsDragging = useRef(false);
-  const handlersRef = useRef({ onComplete, onDelete, onPlannedChange, isPlanned });
+  const handleAction = (e: React.MouseEvent, action?: () => void) => {
+    e.stopPropagation();
+    action?.();
+    // Snap back after action
+    animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+  };
 
-  // Update refs on every render to always have the latest functions
-  useEffect(() => {
-    handlersRef.current = { onComplete, onDelete, onPlannedChange, isPlanned };
-  });
-
-
-  // Reactive bubble logic
-  const bubblesActive = isMobile && isDragging && dragOffset && !isMissed && !isCompleted
-    ? (Math.sqrt(dragOffset.x * dragOffset.x + dragOffset.y * dragOffset.y) < BUBBLE_RADIUS)
-    : false;
-
-  useEffect(() => {
-    if (!isMobile || !isDragging || !dragOffset) {
-      setActiveActionId(prev => prev === null ? null : null);
-      return;
-    }
-
-    const { x: actualX, y: actualY } = dragOffset;
-
-    setActiveActionId(prev => {
-      let next: string | null = null;
-      const TRIGGER_THRESHOLD = 40; // Maintain generous hit area around bubble center
-
-      for (const action of BUBBLE_POSITIONS) {
-        const dist = Math.sqrt(Math.pow(actualX - action.pos.x, 2) + Math.pow(actualY - action.pos.y, 2));
-        if (dist <= TRIGGER_THRESHOLD) {
-          next = action.id;
-          break;
-        }
-      }
-      return prev === next ? prev : next;
-    });
-  }, [isMobile, isDragging, dragOffset]);
-
-  // Trigger actions on drag end
-  useEffect(() => {
-    if (lastIsDragging.current && !isDragging && activeActionId) {
-      const { onComplete, onDelete, onPlannedChange, isPlanned } = handlersRef.current;
-      if (activeActionId === "complete") onComplete?.();
-      else if (activeActionId === "delete") onDelete?.();
-      else if (activeActionId === "today") onPlannedChange?.(!isPlanned);
-    }
-    lastIsDragging.current = !!isDragging;
-  }, [isDragging, activeActionId]);
+  const onDragEnd = (_: any, info: any) => {
+    // If swiped more than 50px left, snap to -180 (revealed), else snap back to 0
+    const threshold = -50;
+    const finalX = info.offset.x < threshold ? -180 : 0;
+    animate(x, finalX, { type: "spring", stiffness: 300, damping: 30 });
+  };
 
   const cardContent = (
     <div className="flex flex-col h-full pointer-events-none">
@@ -159,7 +117,7 @@ export function FocusCard({
       </div>
       
       <h3 className={cn(
-        "font-semibold tracking-tight leading-tight transition-all duration-300",
+        "font-semibold tracking-tight leading-tight",
         (isMissed || isCompleted) ? "text-base mb-0" : "text-lg mb-1",
         isActive ? "text-white" : "text-zinc-300",
         isCompleted && "text-zinc-400 line-through decoration-[3.5px] decoration-primary opacity-100"
@@ -189,6 +147,15 @@ export function FocusCard({
               title={isPlanned ? "Remove from Today" : "Add to Today"}
             >
               <span className="text-xl font-black">+</span>
+            </button>
+          )}
+          {onRecommit && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onRecommit(); }}
+              className="w-12 h-12 rounded-full bg-primary/10 border border-primary/30 text-primary flex items-center justify-center hover:bg-primary hover:text-void transition-all"
+              title="Recommit to Today"
+            >
+              <RotateCcw size={20} />
             </button>
           )}
           {onComplete && (
@@ -227,51 +194,75 @@ export function FocusCard({
   );
 
   return (
-    <div className={cn(
-      "relative overflow-visible group",
-      bubblesActive ? "z-50" : "z-auto"
-    )}>
-      {/* Portal-based bubbles positioned at card's original center */}
-      <ActionBubbles 
-        isVisible={bubblesActive} 
-        activeActionId={activeActionId}
-        onPlannedChange={isPlanned}
-        center={dragStartCenter || undefined}
-      />
+    <div className="relative overflow-hidden rounded-2xl group bg-void shadow-inner">
+      {/* Action Tray (Mobile Swipe) */}
+      <div className="absolute inset-0 flex justify-end items-center gap-2 pr-4">
+        <button
+          onClick={(e) => handleAction(e, onDelete)}
+          className="w-12 h-12 flex items-center justify-center rounded-xl bg-rose-500/20 text-rose-500 hover:bg-rose-500/40 transition-colors"
+        >
+          <Trash2 size={20} />
+        </button>
+        {isCarriedForward && onRecommit && (
+          <button
+            onClick={(e) => handleAction(e, onRecommit)}
+            className="w-12 h-12 flex items-center justify-center rounded-xl bg-amber-500/20 text-amber-500 hover:bg-amber-500/40 transition-colors"
+          >
+            <Calendar size={20} />
+          </button>
+        )}
+        {!isCompleted && !isMissed && onComplete && (
+          <button
+            onClick={(e) => handleAction(e, onComplete)}
+            className="w-12 h-12 flex items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500/40 transition-colors"
+          >
+            <Check size={20} />
+          </button>
+        )}
+      </div>
 
       <motion.div
+        drag={isMobile && !isDragging ? "x" : false}
+        dragDirectionLock
+        dragConstraints={{ left: -180, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={onDragEnd}
         onClick={() => {
-          if (!bubblesActive && !isMissed && !isCompleted) onClick?.();
+          if (!isMissed && !isCompleted) onClick?.();
         }}
         className={cn(
-          "relative bg-surface border rounded-2xl transition-all duration-300 card-shadow cursor-pointer will-change-transform z-10",
+          "relative border rounded-2xl cursor-pointer will-change-transform z-10",
+          "bg-[#0f0f12]", // Strictly opaque color
+          "transition-[background-color,border-color,opacity,box-shadow,filter] duration-200",
           (isMissed || isCompleted) ? "p-3.5" : "p-4 md:p-4.5",
-          bubblesActive ? "transition-none" : "",
-          isActive ? "bg-surface/90 border-transparent shadow-[0_0_30px_-10px_rgba(0,0,0,0.5)]" : "border-transparent hover:border-border/50",
-          !isMobile && !isDragging && "group-hover:border-border/30",
-          bubblesActive && "brightness-75 contrast-110",
-          isMissed && "opacity-40 border-dashed border-zinc-800 scale-[0.98] blur-[0.2px]",
-          isCompleted && "bg-emerald-500/[0.01] border-emerald-500/5 opacity-80"
+          isActive ? "border-transparent shadow-[0_0_30px_-10px_rgba(0,0,0,0.5)] bg-[#15151a]" : "border-transparent border-zinc-800",
+          !isMobile && !isDragging && "group-hover:border-zinc-700"
         )}
         style={{ 
-          background: isActive 
-            ? `linear-gradient(135deg, ${hexToRgba(projectColor || '#facc15', 0.05)} 0%, rgba(15, 15, 18, 0.95) 100%)` 
-            : `linear-gradient(135deg, ${hexToRgba(projectColor || '#facc15', 0.02)} 0%, rgba(15, 15, 18, 0.98) 100%)`,
+          x,
+          backgroundColor: '#0f0f12', // Solid base to prevent any transparency
+          backgroundImage: isActive 
+            ? `linear-gradient(135deg, ${hexToRgba(projectColor || '#facc15', 0.15)} 0%, #0f0f12 100%)` 
+            : `linear-gradient(135deg, ${hexToRgba(projectColor || '#facc15', 0.08)} 0%, #0f0f12 100%)`,
           borderColor: isActive && projectColor ? `${projectColor}22` : projectColor ? `${projectColor}15` : undefined,
           boxShadow: isActive && projectColor ? `0 0 40px -15px ${hexToRgba(projectColor, 0.2)}` : undefined
         }}
       >
-        {/* Left Accent Bar */}
-        <div 
-          className="absolute left-0 w-1 rounded-r-full transition-all duration-300"
-          style={{ 
-            top: (isMissed || isCompleted) ? '12px' : '16px',
-            bottom: (isMissed || isCompleted) ? '12px' : '16px',
-            backgroundColor: isCompleted ? '#10b981' : isMissed ? '#27272a' : (projectColor || '#facc15'),
-            opacity: isMissed ? 0.2 : (isActive ? 1 : 0.3)
-          }}
-        />
-        {cardContent}
+        <div className={cn(
+          "w-full h-full transition-opacity duration-300",
+          isMissed ? "opacity-40" : isCompleted ? "opacity-80" : "opacity-100"
+        )}>
+          {/* Left Accent Bar */}
+          <div 
+            className="absolute left-0 w-1 rounded-r-full transition-[height,top,bottom,background-color] duration-300"
+            style={{ 
+              top: (isMissed || isCompleted) ? '12px' : '16px',
+              bottom: (isMissed || isCompleted) ? '12px' : '16px',
+              backgroundColor: isCompleted ? '#10b981' : isMissed ? '#27272a' : (projectColor || '#facc15')
+            }}
+          />
+          {cardContent}
+        </div>
       </motion.div>
     </div>
   );

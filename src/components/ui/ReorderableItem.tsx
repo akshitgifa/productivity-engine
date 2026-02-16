@@ -211,7 +211,7 @@ export function ReorderableItem<T>({ value, children, isHigherZ, disableDrag, on
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        className="transition-all duration-150 select-none"
+        className="transition-[transform,box-shadow,opacity] duration-300 select-none"
       >
         {clonedChild}
       </div>
