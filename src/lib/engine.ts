@@ -33,8 +33,7 @@ const TIER_WEIGHTS: Record<ProjectTier, number> = {
   4: 0.5,
 };
 
-export function calculateUrgencyScore(task: Task): number {
-  const now = new Date();
+export function calculateUrgencyScore(task: Task, now: Date = new Date()): number {
   
   // 1. Mission Critical Override (< 24h)
   if (task.dueDate) {
@@ -84,9 +83,10 @@ export function mapTaskData(t: any): Task {
 }
 
 export function sortTasksByUrgency(tasks: Task[]): Task[] {
+  const now = new Date();
   return [...tasks].sort((a, b) => {
-    const scoreA = calculateUrgencyScore(a);
-    const scoreB = calculateUrgencyScore(b);
+    const scoreA = calculateUrgencyScore(a, now);
+    const scoreB = calculateUrgencyScore(b, now);
     return scoreB - scoreA;
   });
 }
@@ -99,6 +99,7 @@ export function sortTasksByUrgency(tasks: Task[]): Task[] {
  * 4. Tiebreaker → urgency score (higher first)
  */
 export function sortTasksByUserOrder(tasks: Task[]): Task[] {
+  const now = new Date();
   return [...tasks].sort((a, b) => {
     const aHasDeadline = !!a.dueDate;
     const bHasDeadline = !!b.dueDate;
@@ -130,7 +131,7 @@ export function sortTasksByUserOrder(tasks: Task[]): Task[] {
     }
 
     // Tiebreaker: urgency score (descending — higher urgency first)
-    return calculateUrgencyScore(b) - calculateUrgencyScore(a);
+    return calculateUrgencyScore(b, now) - calculateUrgencyScore(a, now);
   });
 }
 

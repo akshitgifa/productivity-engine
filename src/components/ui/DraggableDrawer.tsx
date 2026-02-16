@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence, useMotionValue, animate } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, animate, useTransform } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface DraggableDrawerProps {
@@ -28,7 +28,15 @@ export function DraggableDrawer({
 }: DraggableDrawerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const y = useMotionValue(typeof window !== "undefined" ? window.innerHeight : 1000);
+  const windowHeight = typeof window !== "undefined" ? window.innerHeight : 1000;
+  const y = useMotionValue(windowHeight);
+  
+  // Calculate dynamic height based on y position
+  // When y = 0, height = windowHeight
+  // When y = windowHeight, height = 0
+  const drawerHeight = useTransform(y, (currentY) => {
+    return Math.max(0, windowHeight - currentY);
+  });
 
   // Native pointer drag state (refs to avoid re-renders during drag)
   const isDragging = useRef(false);
@@ -180,7 +188,7 @@ export function DraggableDrawer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[9999] bg-black/60"
             onClick={() => snapTo("closed")}
           />
 
@@ -189,38 +197,47 @@ export function DraggableDrawer({
             key="mobile-drawer"
             style={{ y }}
             className={cn(
-              "fixed inset-x-0 top-0 z-[10000] bg-zinc-900 border-t border-white/10 shadow-2xl flex flex-col rounded-t-[2.5rem] md:hidden h-[100vh]",
+              "fixed inset-x-0 top-0 z-[10000] flex flex-col md:hidden h-[100vh]",
               className
             )}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* ── Drag Zone: handle + header ── */}
-            <div
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              style={{ touchAction: "none" }}
-              className="shrink-0 select-none"
+            {/* The visible content area is constrained to exactly the on-screen portion */}
+            <motion.div
+              style={{ height: drawerHeight }}
+              className="flex flex-col bg-zinc-900 border-t border-white/10 shadow-2xl rounded-t-[2.5rem] overflow-hidden"
             >
-              {/* Drag handle pill */}
-              <div className="pt-4 pb-2 flex flex-col items-center cursor-grab active:cursor-grabbing">
-                <div className="w-12 h-1.5 bg-zinc-700 rounded-full" />
+              {/* ── Drag Zone: handle + header ── */}
+              <div
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+                style={{ touchAction: "none" }}
+                className="shrink-0 select-none"
+              >
+                {/* Drag handle pill */}
+                <div className="pt-4 pb-2 flex flex-col items-center cursor-grab active:cursor-grabbing">
+                  <div className="w-12 h-1.5 bg-zinc-700 rounded-full" />
+                </div>
+
+                {/* Header */}
+                {(title || headerAction) && (
+                  <div className="flex justify-between items-center px-6 py-2">
+                    {title && <div className="flex-1 overflow-hidden">{title}</div>}
+                    {headerAction && <div className="shrink-0">{headerAction}</div>}
+                  </div>
+                )}
               </div>
 
-              {/* Header */}
-              {(title || headerAction) && (
-                <div className="flex justify-between items-center px-6 py-2">
-                  {title && <div className="flex-1 overflow-hidden">{title}</div>}
-                  {headerAction && <div className="shrink-0">{headerAction}</div>}
-                </div>
-              )}
-            </div>
+              {/* ── Scrollable Content ── */}
+              <div className="flex-1 overflow-y-auto px-6 pb-12 custom-scrollbar overscroll-contain">
+                {children}
+              </div>
+            </motion.div>
 
-            {/* ── Scrollable Content ── */}
-            <div className="flex-1 overflow-y-auto px-6 pb-24 custom-scrollbar overscroll-contain">
-              {children}
-            </div>
+            {/* Extra space below screen (keeps background solid if over-dragged upwards) */}
+            <div className="flex-1 bg-zinc-900" />
           </motion.div>
 
           {/* ── Desktop Modal ── */}

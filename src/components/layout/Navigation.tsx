@@ -90,7 +90,7 @@ export function Navigation() {
       <motion.button
         onClick={() => setShowCatchUp(true)}
         className={cn(
-          "fixed top-6 right-6 z-50 w-12 h-12 rounded-2xl glass flex items-center justify-center card-shadow transition-all",
+          "fixed top-6 right-6 z-[110] w-12 h-12 rounded-2xl glass flex items-center justify-center card-shadow transition-all",
           unreadCount > 0 ? "text-amber-400" : "text-zinc-500 hover:text-zinc-300"
         )}
         whileTap={{ scale: 0.95 }}
@@ -121,7 +121,7 @@ export function Navigation() {
         )}
       </AnimatePresence>
 
-      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-lg w-[95%] glass rounded-3xl p-1.5 card-shadow">
+      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] max-w-lg w-[95%] glass rounded-3xl p-1.5 card-shadow">
       <div className="flex items-center justify-between">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href;

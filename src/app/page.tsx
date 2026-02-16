@@ -133,7 +133,10 @@ export default function Home() {
     }
   });
 
-  const completedToday = (completedTodayData || []).filter(Boolean);
+  const completedToday = useMemo(() => 
+    (completedTodayData || []).filter(Boolean).map((t: any) => mapTaskData({ ...t, isCompleted: true })), 
+    [completedTodayData]
+  );
   
   // 4. Retrospective Data Query
   const { data: retrospectiveTasks = EMPTY_ARRAY } = useQuery({
@@ -361,7 +364,7 @@ export default function Home() {
     });
 
     if (viewMode === 'Today' && selectedDate === todayStr) {
-      const doneToday = completedToday.map((t: any) => mapTaskData({ ...t, isCompleted: true }));
+      const doneToday = completedToday;
       return [...filteredResults, ...doneToday];
     }
 
@@ -817,7 +820,7 @@ export default function Home() {
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-40 left-6 right-6 md:bottom-12 md:right-12 md:left-auto md:w-auto md:min-w-[320px] md:translate-x-0 z-[100] glass rounded-2xl px-6 py-4 card-shadow flex items-center justify-between gap-6 border border-white/10"
+            className="fixed bottom-40 left-6 right-6 md:bottom-12 md:right-12 md:left-auto md:w-auto md:min-w-[320px] md:translate-x-0 z-[150] glass rounded-2xl px-6 py-4 card-shadow flex items-center justify-between gap-6 border border-white/10"
           >
             <div className="flex flex-col gap-0.5">
               <span className="text-sm text-white/90 font-medium">

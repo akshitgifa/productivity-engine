@@ -24,7 +24,7 @@ export function QuickCaptureFAB() {
 
   return (
     <>
-      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50">
+      <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[120]">
         <button
           className="w-14 h-14 bg-primary text-void rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform duration-100"
           aria-label="Quick Capture"

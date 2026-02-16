@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Check, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -111,79 +112,109 @@ export function ProjectSelector({
 
         <AnimatePresence>
           {isOpen && (
-            <>
-              {/* Mobile Overlay / Backdrop */}
-              {isMobile && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 bg-void/60 backdrop-blur-sm z-[110]"
-                  onClick={() => setIsOpen(false)}
-                />
-              )}
-
-              {/* Selection Menu */}
-              <motion.div
-                initial={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.95, y: 4 }}
-                animate={isMobile ? { y: 0 } : { opacity: 1, scale: 1, y: 0 }}
-                exit={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.95, y: 4 }}
-                transition={isMobile ? { type: "spring", damping: 25, stiffness: 200 } : { duration: 0.1 }}
-                className={cn(
-                  "bg-surface border border-border overflow-hidden card-shadow z-[111]",
-                  isMobile 
-                    ? "fixed bottom-0 left-0 right-0 rounded-t-[2rem] p-6 pt-2 pb-12 max-h-[70vh] flex flex-col" 
-                    : cn(
-                        "absolute left-0 right-0 rounded-xl py-1",
-                        openUpwards ? "bottom-full mb-2" : "top-full mt-2"
-                      )
-                )}
-              >
-                {isMobile && (
-                  <div className="flex flex-col items-center py-3 mb-2">
-                    <div className="w-12 h-1.5 bg-zinc-800 rounded-full mb-4" />
-                    <h3 className="text-xs font-mono uppercase tracking-widest text-zinc-500">Select Project</h3>
-                  </div>
-                )}
-
-                <div 
-                  className={cn(
-                    "custom-scrollbar",
-                    isMobile ? "overflow-y-auto space-y-1 flex-1" : "max-h-64 overflow-y-auto"
-                  )}
-                  onWheel={(e) => e.stopPropagation()}
-                >
-                  {projectList.map((project) => (
-                    <button
-                      key={project.id}
-                      type="button"
-                      onClick={() => handleSelect(project.id, project.name)}
-                      className={cn(
-                        "w-full flex items-center justify-between px-4 py-3 text-sm transition-all group",
-                        isMobile ? "rounded-xl" : "hover:bg-primary/5",
-                        selectedProjectId === project.id ? (isMobile ? "bg-primary/10" : "bg-primary/5") : ""
-                      )}
+            <div className="z-[110]">
+              {isMobile ? (
+                typeof document !== "undefined" && createPortal(
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 bg-void/60 z-[10001]"
+                      onClick={() => setIsOpen(false)}
+                    />
+                    <motion.div
+                      initial={{ y: "100%" }}
+                      animate={{ y: 0 }}
+                      exit={{ y: "100%" }}
+                      transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                      className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border rounded-t-[2rem] p-6 pt-2 pb-12 max-h-[70vh] flex flex-col z-[10002] card-shadow"
                     >
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <div 
-                          className="w-2 h-2 rounded-full shrink-0" 
-                          style={{ backgroundColor: project.color }} 
-                        />
-                        <span className={cn(
-                          "truncate transition-colors",
-                          selectedProjectId === project.id ? "text-primary font-bold" : "text-zinc-400 group-hover:text-zinc-200"
-                        )}>
-                          {project.name}
-                        </span>
+                      <div className="flex flex-col items-center py-3 mb-2">
+                        <div className="w-12 h-1.5 bg-zinc-800 rounded-full mb-4" />
+                        <h3 className="text-xs font-mono uppercase tracking-widest text-zinc-500">Select Project</h3>
                       </div>
-                      {selectedProjectId === project.id && (
-                        <Check size={14} className="text-primary shrink-0" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            </>
+                      <div 
+                        className="overflow-y-auto space-y-1 flex-1 custom-scrollbar"
+                        onWheel={(e) => e.stopPropagation()}
+                      >
+                        {projectList.map((project) => (
+                          <button
+                            key={project.id}
+                            type="button"
+                            onClick={() => handleSelect(project.id, project.name)}
+                            className={cn(
+                              "w-full flex items-center justify-between px-4 py-3 text-sm transition-all rounded-xl group",
+                              selectedProjectId === project.id ? "bg-primary/10" : "hover:bg-white/5"
+                            )}
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div 
+                                className="w-2 h-2 rounded-full shrink-0" 
+                                style={{ backgroundColor: project.color }} 
+                              />
+                              <span className={cn(
+                                "truncate transition-colors",
+                                selectedProjectId === project.id ? "text-primary font-bold" : "text-zinc-400 group-hover:text-zinc-200"
+                              )}>
+                                {project.name}
+                              </span>
+                            </div>
+                            {selectedProjectId === project.id && (
+                              <Check size={14} className="text-primary shrink-0" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </>
+                , document.body)
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 4 }}
+                  transition={{ duration: 0.1 }}
+                  className={cn(
+                    "absolute left-0 right-0 rounded-xl py-1 bg-surface border border-border overflow-hidden card-shadow z-[200]",
+                    openUpwards ? "bottom-full mb-2" : "top-full mt-2"
+                  )}
+                >
+                  <div 
+                    className="max-h-64 overflow-y-auto custom-scrollbar"
+                    onWheel={(e) => e.stopPropagation()}
+                  >
+                    {projectList.map((project) => (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => handleSelect(project.id, project.name)}
+                        className={cn(
+                          "w-full flex items-center justify-between px-4 py-3 text-sm transition-all hover:bg-primary/5 group",
+                          selectedProjectId === project.id ? "bg-primary/5" : ""
+                        )}
+                      >
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <div 
+                            className="w-2 h-2 rounded-full shrink-0" 
+                            style={{ backgroundColor: project.color }} 
+                          />
+                          <span className={cn(
+                            "truncate transition-colors",
+                            selectedProjectId === project.id ? "text-primary font-bold" : "text-zinc-400 group-hover:text-zinc-200"
+                          )}>
+                            {project.name}
+                          </span>
+                        </div>
+                        {selectedProjectId === project.id && (
+                          <Check size={14} className="text-primary shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </div>
           )}
         </AnimatePresence>
       </div>
