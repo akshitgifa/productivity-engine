@@ -5,7 +5,7 @@ import { FocusCard } from "@/components/ui/FocusCard";
 import { TimeAvailableSelector } from "@/components/layout/TimeAvailableSelector";
 import { useUserStore } from "@/store/userStore";
 import { useTaskFulfillment } from "@/hooks/useTaskFulfillment";
-import { CheckCircle2, Share2, Calendar as CalendarIcon, Zap, Target, Search, Settings, Trophy, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { CheckCircle2, Share2, Calendar as CalendarIcon, Zap, Target, Search, Settings, Trophy, Plus, ChevronLeft, ChevronRight, List, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { sortTasksByUserOrder, mapTaskData, Task, distributeSoftPool, identifyDecayedTasks } from "@/lib/engine";
@@ -347,11 +347,9 @@ export default function Home() {
       });
     }
 
-    /* 
     if (timeAvailable) {
       filtered = filtered.filter(t => t.durationMinutes <= timeAvailable);
     }
-    */
 
     if (viewMode !== 'Today') return filtered;
 
@@ -479,109 +477,181 @@ export default function Home() {
   };
 
   return (
-    <div className="px-6 pt-12 pb-32 max-w-md md:max-w-6xl mx-auto overflow-x-hidden">
-      <header className="mb-10">
-        <div className="flex items-center justify-between mb-4">
+    <div className="px-6 pt-8 md:pt-12 pb-32 max-w-md md:max-w-6xl mx-auto overflow-x-hidden">
+      <header className="mb-4 md:mb-10">
+        {/* Row 1: Title + Actions */}
+        <div className="flex items-center justify-between mb-3 md:mb-4">
           <div>
-            <p className="text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-1">Intelligence</p>
-            <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
+            <p className="hidden md:block text-[10px] font-bold text-primary uppercase tracking-[0.3em] mb-1">Intelligence</p>
+            <h1 className="text-2xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
               {(() => {
+                if (viewMode === 'Master') return "Master List";
                 if (selectedDate === todayStr) return "Today";
                 const tomorrow = toLocalISOString(addDays(new Date(), 1));
                 if (selectedDate === tomorrow) return "Tomorrow";
                 const yesterday = toLocalISOString(addDays(new Date(), -1));
                 if (selectedDate === yesterday) return "Yesterday";
-                return format(new Date(selectedDate), "EEEE");
+                return format(new Date(selectedDate), "EEE, MMM d");
               })()}
             </h1>
           </div>
-          <div className="flex gap-4 items-center">
+          <div className="flex gap-2 md:gap-4 items-center">
             <Link
               href="/export"
-              className="h-10 px-4 md:h-12 md:px-6 rounded-2xl md:rounded-2xl bg-surface/40 text-primary border border-primary/20 flex items-center gap-3 card-shadow hover:bg-primary/10 transition-all font-black text-[10px] md:text-[11px] tracking-[0.2em]"
+              className="h-9 w-9 md:h-12 md:px-6 rounded-xl md:rounded-2xl bg-surface/40 text-primary border border-primary/20 flex items-center justify-center gap-3 card-shadow hover:bg-primary/10 transition-all font-black text-[10px] md:text-[11px] tracking-[0.2em]"
             >
-              <Share2 size={16} strokeWidth={2.5} />
+              <Share2 size={15} strokeWidth={2.5} />
               <span className="hidden md:inline">EXPORT</span>
             </Link>
             <UserProfile />
           </div>
         </div>
 
-        {/* View Selection Toggle */}
-        <div className="flex bg-surface/40 backdrop-blur-md border border-border/20 p-1.5 rounded-3xl w-full max-w-[320px] mb-8">
-          <button
-            onClick={() => handleViewModeChange('Today')}
-            className={cn(
-              "flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all",
-              viewMode === 'Today' ? "bg-primary text-void shadow-lg" : "text-zinc-500 hover:text-zinc-300"
-            )}
-          >
-            Today
-          </button>
+        {/* Row 2: Day Picker Strip with ALL pill (mobile: compact) */}
+        <div className="flex gap-1.5 md:gap-2 items-center mb-3 md:mb-4 min-w-0">
+          {/* ALL pill for Master List - Fixed on the Left */}
           <button
             onClick={() => handleViewModeChange('Master')}
             className={cn(
-              "flex-1 py-3 text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all",
-              viewMode === 'Master' ? "bg-primary text-void shadow-lg" : "text-zinc-500 hover:text-zinc-300"
+              "flex flex-col items-center justify-center min-w-[54px] md:min-w-[64px] h-11 md:h-16 rounded-xl md:rounded-2xl border transition-all shrink-0 gap-0.5",
+              viewMode === 'Master'
+                ? "bg-primary text-void border-primary shadow-lg scale-105"
+                : "bg-surface/40 border-border/40 text-primary hover:border-primary/60 border-dashed"
             )}
           >
-            Master List
+            <List size={14} className="md:hidden" />
+            <List size={16} className="hidden md:block" />
+            <span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest">All</span>
+          </button>
+
+          {/* Scrollable Day Picker */}
+          <div className="flex gap-1.5 md:gap-2 overflow-x-auto no-scrollbar pb-0.5 flex-1 min-w-0">
+            {Array.from({ length: 9 }).map((_, i) => {
+              const date = new Date();
+              date.setDate(date.getDate() + (i - 2));
+              const dateStr = toLocalISOString(date);
+              const isSelected = viewMode === 'Today' && selectedDate === dateStr;
+              const isToday = dateStr === todayStr;
+
+              return (
+                <button
+                  key={dateStr}
+                  onClick={() => {
+                    setSelectedDate(dateStr);
+                    handleViewModeChange('Today');
+                  }}
+                  className={cn(
+                    "flex flex-col items-center justify-center min-w-[48px] md:min-w-[60px] h-11 md:h-16 rounded-xl md:rounded-2xl border transition-all relative shrink-0",
+                    isSelected 
+                      ? "bg-primary text-void border-primary shadow-lg scale-105" 
+                      : "bg-surface/40 border-border/20 text-zinc-500 hover:border-zinc-400"
+                  )}
+                >
+                  <span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest opacity-60">
+                    {format(date, "EEE")}
+                  </span>
+                  <span className="text-xs md:text-sm font-bold">
+                    {format(date, "d")}
+                  </span>
+                  {isToday && !isSelected && (
+                    <div className="absolute top-0.5 right-0.5 md:top-1 md:right-1 w-1 h-1 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          
+          {/* Calendar picker - Fixed on the Right */}
+          <div className="relative group shrink-0">
+             <input 
+               type="date"
+               className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
+               value={selectedDate}
+               onChange={(e) => {
+                 setSelectedDate(e.target.value);
+                 handleViewModeChange('Today');
+               }}
+             />
+             <button className="h-11 w-10 md:h-16 md:w-12 flex items-center justify-center rounded-xl md:rounded-2xl bg-surface/40 border border-border/20 text-zinc-500 group-hover:border-primary/30 group-hover:text-primary transition-all">
+               <CalendarIcon size={16} className="md:hidden" />
+               <CalendarIcon size={18} className="hidden md:block" />
+             </button>
+          </div>
+        </div>
+
+        {/* Row 3 (mobile): Compact controls bar — Limit + Filter */}
+        <div className="flex md:hidden items-center gap-2 mb-1">
+          {/* Compact Limit Selector */}
+          <TimeAvailableSelector />
+
+          {/* Compact Filter Trigger */}
+          <button
+            onClick={() => setFiltersOpen((prev) => !prev)}
+            className={cn(
+              "relative h-9 w-9 flex items-center justify-center rounded-xl border transition-all shrink-0",
+              filtersOpen || activeFilterCount > 0
+                ? "bg-primary/10 border-primary/30 text-primary" 
+                : "bg-surface/40 border-border/20 text-zinc-500"
+            )}
+          >
+            <SlidersHorizontal size={14} />
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-void text-[8px] font-black rounded-full flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
         </div>
 
-        {/* Day Picker */}
-        {viewMode === 'Today' && (
-          <div className="flex gap-2 items-center mb-4">
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 flex-1">
-              {Array.from({ length: 9 }).map((_, i) => {
-                const date = new Date();
-                date.setDate(date.getDate() + (i - 2)); // Show 2 days ago, yesterday, today, and next 6 days
-                const dateStr = toLocalISOString(date);
-                const isSelected = selectedDate === dateStr;
-                const isToday = dateStr === todayStr;
+        {/* Mobile filter dropdown */}
+        {filtersOpen && (
+          <div className="md:hidden mb-3 space-y-1.5 bg-surface/60 backdrop-blur-md border border-border/20 rounded-2xl p-3">
+            <button
+              type="button"
+              onClick={() => toggleProjectFilter("INBOX")}
+              className={cn(
+                "w-full flex items-center justify-between px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all",
+                projectFilters.includes("INBOX")
+                  ? "bg-primary/10 border-primary/30 text-primary"
+                  : "bg-void/40 border-border/20 text-zinc-500 hover:text-zinc-300"
+              )}
+            >
+              <span>Inbox</span>
+              {projectFilters.includes("INBOX") && <span className="text-[9px]">On</span>}
+            </button>
 
-                return (
-                  <button
-                    key={dateStr}
-                    onClick={() => setSelectedDate(dateStr)}
-                    className={cn(
-                      "flex flex-col items-center justify-center min-w-[60px] h-16 rounded-2xl border transition-all relative shrink-0",
-                      isSelected 
-                        ? "bg-primary text-void border-primary shadow-lg scale-105" 
-                        : "bg-surface/40 border-border/20 text-zinc-500 hover:border-zinc-400"
-                    )}
-                  >
-                    <span className="text-[8px] font-black uppercase tracking-widest opacity-60">
-                      {format(date, "EEE")}
-                    </span>
-                    <span className="text-sm font-bold">
-                      {format(date, "d")}
-                    </span>
-                    {isToday && !isSelected && (
-                      <div className="absolute top-1 right-1 w-1 h-1 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary-rgb),0.5)]" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            
-            {/* Full Calendar Toggle / Pick Date */}
-            <div className="relative group shrink-0">
-               <input 
-                 type="date"
-                 className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
-                 value={selectedDate}
-                 onChange={(e) => setSelectedDate(e.target.value)}
-               />
-               <button className="h-16 w-12 flex items-center justify-center rounded-2xl bg-surface/40 border border-border/20 text-zinc-500 group-hover:border-primary/30 group-hover:text-primary transition-all">
-                 <CalendarIcon size={18} />
-               </button>
-            </div>
+            {projects.map((p: any) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => toggleProjectFilter(p.id)}
+                className={cn(
+                  "w-full flex items-center justify-between px-3 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-widest transition-all",
+                  projectFilters.includes(p.id)
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "bg-void/40 border-border/20 text-zinc-500 hover:text-zinc-300"
+                )}
+              >
+                <span>{p.name}</span>
+                {projectFilters.includes(p.id) && <span className="text-[9px]">On</span>}
+              </button>
+            ))}
+
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={() => saveFilters([])}
+                className="w-full mt-1 bg-void/40 border border-border/20 text-zinc-500 hover:text-zinc-300 px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all"
+              >
+                Clear Filters
+              </button>
+            )}
           </div>
         )}
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
+      {/* Desktop controls: Limit + Filter cards (hidden on mobile) */}
+      <div className="hidden md:grid grid-cols-1 md:grid-cols-12 gap-10 mb-10">
         <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-surface/40 backdrop-blur-md border border-border/20 rounded-[2rem] p-4">
             <div className="space-y-4">
@@ -657,12 +727,14 @@ export default function Home() {
             )}
           </div>
         </div>
+      </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-10">
         <div className={cn(
           "md:col-span-12 space-y-4",
           viewMode === 'Today' ? "lg:col-span-8" : "lg:col-span-12"
         )}>
-          <div className="flex items-center justify-between mb-4 md:mb-6">
+          <div className="hidden md:flex items-center justify-between mb-4 md:mb-6">
             <h2 className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-2">
               Focus Objectives
             </h2>

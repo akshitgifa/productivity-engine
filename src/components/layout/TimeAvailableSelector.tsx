@@ -15,13 +15,13 @@ export function TimeAvailableSelector() {
   const { timeAvailable, setTimeAvailable } = useUserStore();
 
   return (
-    <div className="flex items-center gap-3 mb-0 md:mb-6 bg-surface border border-border rounded-lg px-3 py-2">
-      <div className="flex items-center gap-1.5 text-zinc-500">
-        <Clock size={12} />
-        <span className="text-[10px] font-bold uppercase tracking-widest leading-none">Limit</span>
+    <div className="flex flex-1 items-center gap-2 md:gap-3 bg-surface/40 md:bg-surface border border-border/20 md:border-border rounded-xl md:rounded-lg px-2 md:px-3 py-1.5 md:py-2 md:mb-6">
+      <div className="flex items-center gap-1 md:gap-1.5 text-zinc-500 shrink-0">
+        <Clock size={12} className="md:w-3.5 md:h-3.5" />
+        <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest leading-none hidden xs:inline">Limit</span>
       </div>
-      <div className="h-4 w-px bg-zinc-800" />
-      <div className="flex flex-1 justify-between">
+      <div className="h-3 md:h-4 w-px bg-zinc-800 shrink-0" />
+      <div className="flex flex-1 justify-between gap-1 overflow-x-auto no-scrollbar">
         {TIME_OPTIONS.map((opt) => {
           const isActive = timeAvailable === opt.value;
           return (
@@ -29,10 +29,10 @@ export function TimeAvailableSelector() {
               key={opt.label}
               onClick={() => setTimeAvailable(opt.value)}
               className={cn(
-                "text-[10px] font-bold uppercase px-2 py-0.5 rounded transition-all",
+                "text-[8px] md:text-[10px] font-black uppercase px-2 py-1 md:py-0.5 rounded-lg md:rounded transition-all shrink-0",
                 isActive 
-                  ? "bg-primary/20 text-primary font-bold shadow-[0_0_10px_rgba(59,130,246,0.2)]" 
-                  : "text-zinc-600 hover:text-zinc-400"
+                  ? "bg-primary text-void font-black shadow-[0_0_10px_rgba(var(--primary-rgb),0.3)]" 
+                  : "text-zinc-500 hover:text-zinc-300"
               )}
             >
               {opt.label}
