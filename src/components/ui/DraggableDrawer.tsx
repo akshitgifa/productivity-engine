@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence, useMotionValue, animate, useTransform } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, animate } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 interface DraggableDrawerProps {
@@ -26,17 +26,10 @@ export function DraggableDrawer({
   peekHeight = "60vh",
   expandedHeight = "95vh",
 }: DraggableDrawerProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const isExpanded = useRef(false);
   const [mounted, setMounted] = useState(false);
   const windowHeight = typeof window !== "undefined" ? window.innerHeight : 1000;
   const y = useMotionValue(windowHeight);
-  
-  // Calculate dynamic height based on y position
-  // When y = 0, height = windowHeight
-  // When y = windowHeight, height = 0
-  const drawerHeight = useTransform(y, (currentY) => {
-    return Math.max(0, windowHeight - currentY);
-  });
 
   // Native pointer drag state (refs to avoid re-renders during drag)
   const isDragging = useRef(false);
@@ -69,7 +62,7 @@ export function DraggableDrawer({
   const snapTo = useCallback(
     (target: "peek" | "expanded" | "closed") => {
       const targetY = getSnapY(target);
-      setIsExpanded(target === "expanded");
+      isExpanded.current = target === "expanded";
 
       animate(y, targetY, {
         type: "spring",
@@ -90,7 +83,7 @@ export function DraggableDrawer({
       y.set(typeof window !== "undefined" ? window.innerHeight : 1000);
       requestAnimationFrame(() => snapTo("peek"));
     } else {
-      setIsExpanded(false);
+      isExpanded.current = false;
       y.set(typeof window !== "undefined" ? window.innerHeight : 1000);
     }
   }, [isOpen]);
@@ -166,7 +159,7 @@ export function DraggableDrawer({
       }
 
       // Override: strong downward flick from expanded → peek
-      if (isExpanded && currentY > expandedY + 40 && vel > 300) {
+      if (isExpanded.current && currentY > expandedY + 40 && vel > 300) {
         snapTo("peek");
         return;
       }
@@ -195,7 +188,7 @@ export function DraggableDrawer({
           {/* ── Mobile Drawer ── */}
           <motion.div
             key="mobile-drawer"
-            style={{ y }}
+            style={{ y, willChange: "transform" }}
             className={cn(
               "fixed inset-x-0 top-0 z-[10000] flex flex-col md:hidden h-[100vh]",
               className
@@ -203,8 +196,8 @@ export function DraggableDrawer({
             onClick={(e) => e.stopPropagation()}
           >
             {/* The visible content area is constrained to exactly the on-screen portion */}
-            <motion.div
-              style={{ height: drawerHeight }}
+            <div
+              style={{ height: "100vh", willChange: "transform" }}
               className="flex flex-col bg-zinc-900 border-t border-white/10 shadow-2xl rounded-t-[2.5rem] overflow-hidden"
             >
               {/* ── Drag Zone: handle + header ── */}
@@ -231,13 +224,16 @@ export function DraggableDrawer({
               </div>
 
               {/* ── Scrollable Content ── */}
-              <div className="flex-1 overflow-y-auto px-6 pb-12 custom-scrollbar overscroll-contain">
+              <div 
+                className="flex-1 overflow-y-auto px-6 custom-scrollbar overscroll-contain"
+                style={{ 
+                  paddingBottom: "calc(40vh + 80px)", // Ensure bottom content can be scrolled into view in peek mode
+                  willChange: "scroll-position" 
+                }}
+              >
                 {children}
               </div>
-            </motion.div>
-
-            {/* Extra space below screen (keeps background solid if over-dragged upwards) */}
-            <div className="flex-1 bg-zinc-900" />
+            </div>
           </motion.div>
 
           {/* ── Desktop Modal ── */}
