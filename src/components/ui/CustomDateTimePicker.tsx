@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Calendar as CalendarIcon, Clock, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -106,6 +107,131 @@ export function CustomDateTimePicker({ label = "Deadline", value, onChange, clas
   const startDay = getDay(days[0]);
   const padding = Array.from({ length: startDay }).map((_, i) => null);
 
+  const pickerContent = (
+    <>
+      <div className="flex flex-col items-center py-2 mb-4">
+        {isMobile && <div className="w-12 h-1.5 bg-zinc-800 rounded-full mb-4" />}
+        <div className="flex gap-4 border-b border-border w-full justify-center">
+          <button 
+            type="button"
+            onClick={() => setActiveTab("date")}
+            className={cn("px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all", activeTab === "date" ? "text-primary border-b-2 border-primary" : "text-zinc-500")}
+          >
+            Date
+          </button>
+          <button 
+            type="button"
+            onClick={() => setActiveTab("time")}
+            className={cn("px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all", activeTab === "time" ? "text-primary border-b-2 border-primary" : "text-zinc-500")}
+          >
+            Time
+          </button>
+        </div>
+      </div>
+
+      <div className="px-4">
+        {activeTab === "date" ? (
+          <div className="space-y-4">
+            {/* Suggestions Bar */}
+            <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-2">
+              {suggestions.map((s) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={() => {
+                    if (s.value === "") {
+                      setTempDate(null);
+                    } else {
+                      setTempDate(new Date(s.value));
+                      setActiveTab("time");
+                    }
+                  }}
+                  className={cn(
+                    "whitespace-nowrap px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-tight transition-all border",
+                    (tempDate ? tempDate.toISOString() === s.value : s.value === "")
+                      ? "bg-primary/20 border-primary/40 text-primary"
+                      : "bg-void border-border text-zinc-500 hover:text-zinc-300"
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between mb-2">
+              <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1 hover:text-primary transition-colors text-zinc-500"><ChevronLeft size={20} /></button>
+              <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">{format(currentMonth, "MMMM yyyy")}</h4>
+              <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1 hover:text-primary transition-colors text-zinc-500"><ChevronRight size={20} /></button>
+            </div>
+            
+            <div className="grid grid-cols-7 gap-1 text-center mb-1">
+              {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                <span key={i} className="text-[10px] font-bold text-zinc-600 uppercase">{d}</span>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1">
+              {padding.map((_, i) => <div key={`p-${i}`} />)}
+              {days.map((day) => {
+                const isSelected = tempDate && isSameDay(day, tempDate);
+                const isTday = isToday(day);
+                return (
+                  <button
+                    key={day.toISOString()}
+                    type="button"
+                    onClick={() => handleDateSelect(day)}
+                    className={cn(
+                      "aspect-square rounded-lg text-xs flex items-center justify-center transition-all relative",
+                      isSelected ? "bg-primary text-void font-bold" : "hover:bg-primary/10 text-zinc-400",
+                      isTday && !isSelected && "text-primary ring-1 ring-primary/30"
+                    )}
+                  >
+                    {format(day, "d")}
+                    {isSelected && <motion.div layoutId="active-date" className="absolute inset-0 bg-primary rounded-lg -z-10" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6 py-4">
+              <div className="flex flex-col items-center pt-2">
+                <div className="flex gap-4 w-full h-[180px] relative items-center justify-center overflow-hidden">
+                    {/* Selector Highlight */}
+                    <div className="absolute inset-x-0 h-10 bg-primary/10 border-y border-primary/20 pointer-events-none z-10" />
+                    
+                    <TimeWheel 
+                      range={24} 
+                      value={tempDate ? tempDate.getHours() : 0} 
+                      onChange={(h) => handleTimeSelect(h, tempDate ? tempDate.getMinutes() : 0)} 
+                      active={activeTab === "time"}
+                    />
+                    <div className="text-2xl font-mono font-bold text-primary/50 self-center pb-2">:</div>
+                    <TimeWheel 
+                      range={60} 
+                      value={tempDate ? tempDate.getMinutes() : 0} 
+                      onChange={(m) => handleTimeSelect(tempDate ? tempDate.getHours() : 0, m)} 
+                      active={activeTab === "time"}
+                    />
+                </div>
+              </div>
+          </div>
+        )}
+
+        <button 
+          type="button"
+          onClick={() => {
+            onChange(tempDate ? tempDate.toISOString() : "");
+            setIsOpen(false);
+          }}
+          className="w-full bg-primary text-void py-3.5 rounded-xl font-black uppercase text-[10px] tracking-[0.2em] mt-4 mb-2 card-shadow hover:opacity-90 transition-all border border-primary/20"
+        >
+          {tempDate ? (activeTab === "date" ? "Set Deadline" : "Confirm Time") : "Clear Deadline"}
+        </button>
+      </div>
+    </>
+  );
+
   return (
     <div className={cn("space-y-1.5", className)} ref={containerRef}>
       {label && (
@@ -134,149 +260,45 @@ export function CustomDateTimePicker({ label = "Deadline", value, onChange, clas
         <AnimatePresence>
           {isOpen && (
             <>
-              {isMobile && (
+              {isMobile ? (
+                typeof document !== "undefined" && createPortal(
+                  <>
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="fixed inset-0 bg-void/60 backdrop-blur-sm z-[20001]"
+                      onClick={() => setIsOpen(false)}
+                    />
+                    <motion.div
+                      initial={{ y: "100%" }}
+                      animate={{ y: 0 }}
+                      exit={{ y: "100%" }}
+                      transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                      className={cn(
+                        "bg-surface border-t border-border overflow-hidden card-shadow z-[20002]",
+                        "fixed bottom-0 left-0 right-0 rounded-t-[2rem] p-6 pt-2 pb-12 flex flex-col"
+                      )}
+                    >
+                      {pickerContent}
+                    </motion.div>
+                  </>,
+                  document.body
+                )
+              ) : (
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 bg-void/60 backdrop-blur-sm z-[110]"
-                  onClick={() => setIsOpen(false)}
-                />
-              )}
-
-              <motion.div
-                initial={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.95, y: 4 }}
-                animate={isMobile ? { y: 0 } : { opacity: 1, scale: 1, y: 0 }}
-                exit={isMobile ? { y: "100%" } : { opacity: 0, scale: 0.95, y: 4 }}
-                transition={isMobile ? { type: "spring", damping: 25, stiffness: 200 } : { duration: 0.1 }}
-                className={cn(
-                  "bg-surface border border-border overflow-hidden card-shadow z-[111]",
-                  isMobile 
-                    ? "fixed bottom-0 left-0 right-0 rounded-t-[2rem] p-6 pt-2 pb-12 flex flex-col" 
-                    : "absolute top-full left-0 right-0 mt-2 rounded-2xl py-4 w-[320px]"
-                )}
-              >
-                <div className="flex flex-col items-center py-2 mb-4">
-                  {isMobile && <div className="w-12 h-1.5 bg-zinc-800 rounded-full mb-4" />}
-                  <div className="flex gap-4 border-b border-border w-full justify-center">
-                    <button 
-                      onClick={() => setActiveTab("date")}
-                      className={cn("px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all", activeTab === "date" ? "text-primary border-b-2 border-primary" : "text-zinc-500")}
-                    >
-                      Date
-                    </button>
-                    <button 
-                      onClick={() => setActiveTab("time")}
-                      className={cn("px-4 py-2 text-[10px] font-bold uppercase tracking-widest transition-all", activeTab === "time" ? "text-primary border-b-2 border-primary" : "text-zinc-500")}
-                    >
-                      Time
-                    </button>
-                  </div>
-                </div>
-
-                <div className="px-4">
-                  {activeTab === "date" ? (
-                    <div className="space-y-4">
-                      {/* Suggestions Bar */}
-                      <div className="flex gap-2 mb-4 overflow-x-auto no-scrollbar pb-2">
-                        {suggestions.map((s) => (
-                          <button
-                            key={s.label}
-                            type="button"
-                            onClick={() => {
-                              if (s.value === "") {
-                                setTempDate(null);
-                              } else {
-                                setTempDate(new Date(s.value));
-                                setActiveTab("time");
-                              }
-                            }}
-                            className={cn(
-                              "whitespace-nowrap px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-tight transition-all border",
-                              (tempDate ? tempDate.toISOString() === s.value : s.value === "")
-                                ? "bg-primary/20 border-primary/40 text-primary"
-                                : "bg-void border-border text-zinc-500 hover:text-zinc-300"
-                            )}
-                          >
-                            {s.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="flex items-center justify-between mb-2">
-                        <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-1 hover:text-primary transition-colors text-zinc-500"><ChevronLeft size={20} /></button>
-                        <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">{format(currentMonth, "MMMM yyyy")}</h4>
-                        <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-1 hover:text-primary transition-colors text-zinc-500"><ChevronRight size={20} /></button>
-                      </div>
-                      
-                      <div className="grid grid-cols-7 gap-1 text-center mb-1">
-                        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-                          <span key={i} className="text-[10px] font-bold text-zinc-600 uppercase">{d}</span>
-                        ))}
-                      </div>
-
-                      <div className="grid grid-cols-7 gap-1">
-                        {padding.map((_, i) => <div key={`p-${i}`} />)}
-                        {days.map((day) => {
-                          const isSelected = tempDate && isSameDay(day, tempDate);
-                          const isTday = isToday(day);
-                          return (
-                            <button
-                              key={day.toISOString()}
-                              type="button"
-                              onClick={() => handleDateSelect(day)}
-                              className={cn(
-                                "aspect-square rounded-lg text-xs flex items-center justify-center transition-all relative",
-                                isSelected ? "bg-primary text-void font-bold" : "hover:bg-primary/10 text-zinc-400",
-                                isTday && !isSelected && "text-primary ring-1 ring-primary/30"
-                              )}
-                            >
-                              {format(day, "d")}
-                              {isSelected && <motion.div layoutId="active-date" className="absolute inset-0 bg-primary rounded-lg -z-10" />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-6 py-4">
-                       <div className="flex flex-col items-center pt-2">
-                          <div className="flex gap-4 w-full h-[180px] relative items-center justify-center overflow-hidden">
-                             {/* Selector Highlight */}
-                             <div className="absolute inset-x-0 h-10 bg-primary/10 border-y border-primary/20 pointer-events-none z-10" />
-                             
-                             <TimeWheel 
-                               range={24} 
-                               value={tempDate ? tempDate.getHours() : 0} 
-                               onChange={(h) => handleTimeSelect(h, tempDate ? tempDate.getMinutes() : 0)} 
-                               active={activeTab === "time"}
-                             />
-                             <div className="text-2xl font-mono font-bold text-primary/50 self-center pb-2">:</div>
-                             <TimeWheel 
-                               range={60} 
-                               value={tempDate ? tempDate.getMinutes() : 0} 
-                               onChange={(m) => handleTimeSelect(tempDate ? tempDate.getHours() : 0, m)} 
-                               active={activeTab === "time"}
-                             />
-
-                             {/* Wheel Depth Gradients */}
-                          </div>
-                       </div>
-                    </div>
+                  initial={{ opacity: 0, scale: 0.95, y: 4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 4 }}
+                  transition={{ duration: 0.1 }}
+                  className={cn(
+                    "bg-surface border border-border overflow-hidden card-shadow z-[200]",
+                    "absolute top-full left-0 right-0 mt-2 rounded-2xl py-4 w-[320px]"
                   )}
-
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      onChange(tempDate ? tempDate.toISOString() : "");
-                      setIsOpen(false);
-                    }}
-                    className="w-full bg-primary text-void py-3.5 rounded-xl font-black uppercase text-[10px] tracking-[0.2em] mt-4 mb-2 card-shadow hover:opacity-90 transition-all border border-primary/20"
-                  >
-                    {tempDate ? (activeTab === "date" ? "Set Deadline" : "Confirm Time") : "Clear Deadline"}
-                  </button>
-                </div>
-              </motion.div>
+                >
+                  {pickerContent}
+                </motion.div>
+              )}
             </>
           )}
         </AnimatePresence>

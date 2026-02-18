@@ -120,7 +120,7 @@ export function ProjectSelector({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      className="fixed inset-0 bg-void/60 z-[10001]"
+                      className="fixed inset-0 bg-void/60 z-[20001]"
                       onClick={() => setIsOpen(false)}
                     />
                     <motion.div
@@ -128,7 +128,7 @@ export function ProjectSelector({
                       animate={{ y: 0 }}
                       exit={{ y: "100%" }}
                       transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                      className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border rounded-t-[2rem] p-6 pt-2 pb-12 max-h-[70vh] flex flex-col z-[10002] card-shadow"
+                      className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border rounded-t-[2rem] p-6 pt-2 pb-12 max-h-[70vh] flex flex-col z-[20002] card-shadow"
                     >
                       <div className="flex flex-col items-center py-3 mb-2">
                         <div className="w-12 h-1.5 bg-zinc-800 rounded-full mb-4" />
