@@ -196,6 +196,7 @@ export const taskService = {
       project_id: task.projectId,
       duration_minutes: task.durationMinutes || 30,
       completed_at: now,
+      updated_at: now,
     };
     await db.activity_logs.add(activityLog);
     await db.recordAction("activity_logs", "insert", activityLog);

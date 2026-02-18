@@ -110,32 +110,45 @@ async function _processOutboxBatched() {
       let error;
 
       if (action === 'insert' || action === 'update') {
-        const uniqueIds = Array.from(new Set(items.map((i: any) => i.data.id)));
-        const fullRecordsFromDb = await (db as any)[tableName].bulkGet(uniqueIds);
-        const recordMap = new Map();
-        fullRecordsFromDb.forEach((r: any) => {
-          if (r) recordMap.set(r.id, r);
-        });
-
-        const mergedById = new Map<string, Record<string, any>>();
         const tablesWithUserId = new Set(['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards']);
-        
-        for (const item of items) {
-          const { id, ...fields } = item.data;
-          const base = recordMap.get(id) || {};
-          const existing = mergedById.get(id) || base;
-          const sanitizedFields = sanitizeForSupabase(fields);
-          
-          const record: Record<string, any> = { ...existing, ...sanitizedFields, id };
-          if (tablesWithUserId.has(tableName)) {
-            record.user_id = user.id;
+
+        if (action === 'insert') {
+          // For inserts, we need full records from Dexie (they were just created locally)
+          const uniqueIds = Array.from(new Set(items.map((i: any) => i.data.id)));
+          const fullRecordsFromDb = await (db as any)[tableName].bulkGet(uniqueIds);
+          const recordMap = new Map();
+          fullRecordsFromDb.forEach((r: any) => {
+            if (r) recordMap.set(r.id, r);
+          });
+
+          const mergedById = new Map<string, Record<string, any>>();
+          for (const item of items) {
+            const record = sanitizeForSupabase(recordMap.get(item.data.id) || item.data);
+            if (tablesWithUserId.has(tableName)) {
+              record.user_id = user.id;
+            }
+            mergedById.set(record.id, record);
           }
-          mergedById.set(id, record);
+          const rows = Array.from(mergedById.values());
+          const { error: supabaseError } = await supabase.from(tableName).upsert(rows);
+          error = supabaseError;
+        } else {
+          // For updates, only send the changed fields — never read full stale records
+          const mergedById = new Map<string, Record<string, any>>();
+          for (const item of items) {
+            const { id, ...fields } = item.data;
+            const existing = mergedById.get(id) || { id };
+            const sanitizedFields = sanitizeForSupabase(fields);
+            const record: Record<string, any> = { ...existing, ...sanitizedFields, id };
+            if (tablesWithUserId.has(tableName)) {
+              record.user_id = user.id;
+            }
+            mergedById.set(id, record);
+          }
+          const rows = Array.from(mergedById.values());
+          const { error: supabaseError } = await supabase.from(tableName).upsert(rows, { onConflict: 'id', ignoreDuplicates: false });
+          error = supabaseError;
         }
-        const rows = Array.from(mergedById.values());
-        
-        const { error: supabaseError } = await supabase.from(tableName).upsert(rows);
-        error = supabaseError;
 
         if (error) {
           console.error(`[Sync] Supabase rejection for ${key}:`, error);
@@ -259,7 +272,7 @@ async function syncTable(tableName: string, supabase: any, lastSync: string | nu
     } else {
       const remoteUpdate = new Date(remoteUpdateStr || 0).getTime();
       const localUpdate = new Date((localItem as any).updated_at || 0).getTime();
-      if (remoteUpdate >= localUpdate) {
+      if (remoteUpdate > localUpdate) {
         toPut.push(remoteItem);
       }
     }
@@ -298,7 +311,7 @@ export function setupSubscriptions() {
         const remoteUpdate = new Date(newRow.updated_at || 0).getTime();
         const localUpdate = new Date(localItem?.updated_at || 0).getTime();
 
-        if (!localItem || remoteUpdate >= localUpdate) {
+        if (!localItem || remoteUpdate > localUpdate) {
           await (db as any)[table].put(newRow);
           updateStoredTimestamp(table, newRow.updated_at);
         }
