@@ -1,5 +1,5 @@
 # Entropy | Dynamic Context Engine
-
+ 
 **Status:** Active Beta  
 **Stack:** Next.js 15 · Supabase · Dexie.js (local-first) · Gemini 2.0 Flash
 
