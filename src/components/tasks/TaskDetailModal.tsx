@@ -35,6 +35,7 @@ import { NoteEditor } from "@/components/notes/NoteEditor";
 import { ProjectSelector } from "@/components/ui/ProjectSelector";
 import { CustomDateTimePicker } from "@/components/ui/CustomDateTimePicker";
 import { format } from "date-fns";
+import { TagSelector } from "@/components/ui/TagSelector";
 
 interface TaskDetailModalProps {
   task: Task;
@@ -167,6 +168,29 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
   });
 
   const [selectedNote, setSelectedNote] = useState<any | null>(null);
+
+  // Fetch Tags for this task
+  const { data: taskTags = [] } = useQuery({
+    queryKey: ["tasks", task.id, "tags"],
+    queryFn: async () => {
+      const jts = await db.task_tags.where('task_id').equals(task.id).toArray();
+      return jts.map(jt => jt.tag_id);
+    },
+    enabled: isOpen
+  });
+
+  const toggleTagMutation = useMutation({
+    mutationFn: async (tagId: string) => {
+      const isSelected = taskTags.includes(tagId);
+      const newTags = isSelected 
+        ? taskTags.filter(id => id !== tagId)
+        : [...taskTags, tagId];
+      await taskService.setTags(task.id, newTags);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", task.id, "tags"] });
+    }
+  });
 
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -447,46 +471,188 @@ export function TaskDetailModal({ task, isOpen, onClose }: TaskDetailModalProps)
                     </select>
                 )}
             </div>
+
+            <div className="mt-4">
+                <TagSelector
+                    projectId={task.projectId}
+                    selectedTagIds={taskTags}
+                    onToggleTag={(id) => toggleTagMutation.mutate(id)}
+                />
+            </div>
             
             {/* Commitment / Reschedule Section */}
-            <div className="mt-4 pt-4 border-t border-border/5 space-y-2">
+            <div className="mt-4 pt-4 border-t border-border/5 space-y-3">
                 <div className="flex items-center gap-2 mb-2">
                     <Calendar size={12} className="text-zinc-500" />
                     <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Commitment Plan</span>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                    {[
-                        { label: "Today", value: new Date().toISOString().split('T')[0], type: 'on' as const },
-                        { label: "Tomorrow", value: new Date(Date.now() + 86400000).toISOString().split('T')[0], type: 'on' as const },
-                        { label: "Within 3 Days", value: new Date(Date.now() + 3*86400000).toISOString().split('T')[0], type: 'before' as const },
-                        { label: "Within 7 Days", value: new Date(Date.now() + 7*86400000).toISOString().split('T')[0], type: 'before' as const },
-                        { label: "No Plan", value: null, type: 'on' as const },
-                    ].map((opt) => (
-                        <button
-                            key={opt.label}
-                            type="button"
-                            onClick={() => {
-                                taskService.setPlannedDate(task.id, opt.value, opt.type).then(() => {
-                                    queryClient.invalidateQueries({ queryKey: ["tasks"] });
-                                });
-                            }}
-                            className={cn(
-                                "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border",
-                                (task.plannedDate === opt.value && task.plannedDateType === opt.type) || (!task.plannedDate && opt.value === null)
-                                    ? "bg-primary/20 border-primary/30 text-primary"
-                                    : "bg-void border-white/5 text-zinc-600 hover:text-zinc-400"
-                            )}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
+
+                {/* Hard Commitment Presets */}
+                <div className="space-y-1.5">
+                    <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest ml-1">Commit On</span>
+                    <div className="flex flex-wrap gap-2">
+                        {(() => {
+                            const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+                            const tomorrowStr = new Date(Date.now() + 86400000).toLocaleDateString('en-CA');
+                            const isOnPreset = (v: string | null) => task.plannedDate === v && task.plannedDateType === 'on';
+                            const presets = [
+                                { label: "Today", value: todayStr },
+                                { label: "Tomorrow", value: tomorrowStr },
+                            ];
+                            return (
+                                <>
+                                    {presets.map((opt) => (
+                                        <button
+                                            key={opt.label}
+                                            type="button"
+                                            onClick={() => {
+                                                taskService.setPlannedDate(task.id, opt.value, 'on').then(() => {
+                                                    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+                                                });
+                                            }}
+                                            className={cn(
+                                                "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border",
+                                                isOnPreset(opt.value)
+                                                    ? "bg-primary/20 border-primary/30 text-primary"
+                                                    : "bg-void border-white/5 text-zinc-600 hover:text-zinc-400"
+                                            )}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                    {/* Custom date picker */}
+                                    <div className="relative">
+                                        <input
+                                            type="date"
+                                            className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
+                                            value={task.plannedDateType === 'on' && task.plannedDate ? task.plannedDate : ''}
+                                            onChange={(e) => {
+                                                if (e.target.value) {
+                                                    taskService.setPlannedDate(task.id, e.target.value, 'on').then(() => {
+                                                        queryClient.invalidateQueries({ queryKey: ["tasks"] });
+                                                    });
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className={cn(
+                                                "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border",
+                                                task.plannedDateType === 'on' && task.plannedDate && task.plannedDate !== todayStr && task.plannedDate !== tomorrowStr
+                                                    ? "bg-primary/20 border-primary/30 text-primary"
+                                                    : "bg-void border-white/5 text-zinc-600 hover:text-zinc-400"
+                                            )}
+                                        >
+                                            {task.plannedDateType === 'on' && task.plannedDate && task.plannedDate !== todayStr && task.plannedDate !== tomorrowStr
+                                                ? format(new Date(task.plannedDate + 'T00:00:00'), "MMM d")
+                                                : "Pick Date..."}
+                                        </button>
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
                 </div>
+
+                {/* Flexible Window Presets */}
+                <div className="space-y-1.5">
+                    <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest ml-1">Flexible Window</span>
+                    <div className="flex flex-wrap gap-2">
+                        {(() => {
+                            const withinDays = (d: number) => new Date(Date.now() + d * 86400000).toLocaleDateString('en-CA');
+                            const isBeforePreset = (v: string) => task.plannedDate === v && task.plannedDateType === 'before';
+                            const presets = [
+                                { label: "3 Days", value: withinDays(3) },
+                                { label: "7 Days", value: withinDays(7) },
+                                { label: "14 Days", value: withinDays(14) },
+                            ];
+                            return (
+                                <>
+                                    {presets.map((opt) => (
+                                        <button
+                                            key={opt.label}
+                                            type="button"
+                                            onClick={() => {
+                                                taskService.setPlannedDate(task.id, opt.value, 'before').then(() => {
+                                                    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+                                                });
+                                            }}
+                                            className={cn(
+                                                "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border",
+                                                isBeforePreset(opt.value)
+                                                    ? "bg-cyan-500/20 border-cyan-500/30 text-cyan-400"
+                                                    : "bg-void border-white/5 text-zinc-600 hover:text-cyan-400/60"
+                                            )}
+                                        >
+                                            Within {opt.label}
+                                        </button>
+                                    ))}
+                                    {/* Custom flexible window date picker */}
+                                    <div className="relative">
+                                        <input
+                                            type="date"
+                                            className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
+                                            value={task.plannedDateType === 'before' && task.plannedDate ? task.plannedDate : ''}
+                                            min={new Date(Date.now() + 86400000).toLocaleDateString('en-CA')}
+                                            onChange={(e) => {
+                                                if (e.target.value) {
+                                                    taskService.setPlannedDate(task.id, e.target.value, 'before').then(() => {
+                                                        queryClient.invalidateQueries({ queryKey: ["tasks"] });
+                                                    });
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className={cn(
+                                                "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border",
+                                                task.plannedDateType === 'before' && task.plannedDate 
+                                                    && task.plannedDate !== withinDays(3) 
+                                                    && task.plannedDate !== withinDays(7) 
+                                                    && task.plannedDate !== withinDays(14)
+                                                    ? "bg-cyan-500/20 border-cyan-500/30 text-cyan-400"
+                                                    : "bg-void border-white/5 text-zinc-600 hover:text-cyan-400/60"
+                                            )}
+                                        >
+                                            {task.plannedDateType === 'before' && task.plannedDate
+                                                && task.plannedDate !== withinDays(3) 
+                                                && task.plannedDate !== withinDays(7) 
+                                                && task.plannedDate !== withinDays(14)
+                                                ? `By ${format(new Date(task.plannedDate + 'T00:00:00'), "MMM d")}`
+                                                : "Custom..."}
+                                        </button>
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
+                </div>
+
+                {/* No Plan */}
+                <button
+                    type="button"
+                    onClick={() => {
+                        taskService.setPlannedDate(task.id, null).then(() => {
+                            queryClient.invalidateQueries({ queryKey: ["tasks"] });
+                        });
+                    }}
+                    className={cn(
+                        "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border",
+                        !task.plannedDate
+                            ? "bg-primary/20 border-primary/30 text-primary"
+                            : "bg-void border-white/5 text-zinc-600 hover:text-zinc-400"
+                    )}
+                >
+                    No Plan
+                </button>
+
                 {task.plannedDate && (
                     <p className="text-[9px] font-medium text-zinc-500 italic mt-1 ml-1">
-                        Currently {task.plannedDateType === 'before' ? `suggested before ${format(new Date(task.plannedDate), "MMM d")}` : `committed to ${format(new Date(task.plannedDate), "MMM d")}`}
+                        Currently {task.plannedDateType === 'before' ? `flexible until ${format(new Date(task.plannedDate + 'T00:00:00'), "MMM d")}` : `committed to ${format(new Date(task.plannedDate + 'T00:00:00'), "MMM d")}`}
                     </p>
                 )}
             </div>
+
           </div>
 
           {/* Navigation */}

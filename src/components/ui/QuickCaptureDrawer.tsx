@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Send, Sparkles, Check, Edit2, Mic, Square, Zap, FileText, MessageCircle, WifiOff } from "lucide-react";
+import { X, Send, Sparkles, Check, Edit2, Mic, Square, Zap, FileText, MessageCircle, WifiOff, ChevronDown } from "lucide-react";
 import { cn, parseDuration } from "@/lib/utils";
 import { useVoiceRecorder } from "@/hooks/useVoiceRecorder";
 import { VoiceVisualizer } from "./VoiceVisualizer";
@@ -16,6 +16,7 @@ import { format, addDays } from "date-fns";
 import { ProjectSelector } from "./ProjectSelector";
 import { CustomDateTimePicker } from "./CustomDateTimePicker";
 import { DraggableDrawer } from "./DraggableDrawer";
+import { TagSelector } from "./TagSelector";
 
 interface QuickCaptureDrawerProps {
   isOpen: boolean;
@@ -59,7 +60,7 @@ export function QuickCaptureDrawer({
     projectId: initialProjectId,
     projectName: "",
     duration: "30m",
-    energy: "Normal",
+    tagIds: [] as string[],
     dueDate: "",
     plannedDate: toLocalISOString(), // Default to today
     plannedDateType: 'on' as 'on' | 'before',
@@ -127,7 +128,6 @@ export function QuickCaptureDrawer({
         description: result.description || null,
         project_id: finalProjectId || null,
         est_duration_minutes: parseDuration(result.duration?.toString()) || 30,
-        energy_tag: result.energy || 'Shallow',
         recurrence_interval_days: result.recurrence || null,
         recurrence_type: result.recurrenceType || 'completion',
         due_date: result.dueDate || null,
@@ -165,7 +165,7 @@ export function QuickCaptureDrawer({
       projectId: "NONE",
       projectName: "",
       duration: "30m",
-      energy: "Normal",
+      tagIds: [],
       dueDate: "",
       plannedDate: toLocalISOString(),
       plannedDateType: 'on',
@@ -237,9 +237,9 @@ export function QuickCaptureDrawer({
         projectId: matchingProject?.id || "NONE",
         projectName: matchingProject?.id === "NONE" ? "Inbox" : (matchingProject?.name || data.project || ""),
         duration: data.duration || "30m",
-        energy: data.energy || "Normal",
         dueDate: data.dueDate ? new Date(new Date(data.dueDate).getTime() - new Date(data.dueDate).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
         plannedDate: data.plannedDate || toLocalISOString(),
+        tagIds: [],
         plannedDateType: data.plannedDateType || 'on',
         recurrence: data.recurrence || "",
         recurrenceType: data.recurrenceType || "completion"
@@ -289,7 +289,7 @@ export function QuickCaptureDrawer({
       description: manualData.description,
       project: manualData.projectName || "None",
       duration: manualData.duration,
-      energy: manualData.energy,
+      tagIds: manualData.tagIds,
       projectId: manualData.projectId === "NONE" ? undefined : manualData.projectId,
       dueDate: manualData.dueDate || undefined,
       plannedDate: manualData.plannedDate || undefined,
@@ -402,56 +402,103 @@ export function QuickCaptureDrawer({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-4"
+              className="space-y-3"
             >
-              <div className="space-y-2">
-                <input 
-                  autoFocus
-                  type="text"
-                  className="w-full bg-void border border-white/5 rounded-2xl px-5 py-4 text-sm focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-zinc-500"
-                  placeholder="Task Name"
-                  value={manualData.title}
-                  onChange={(e) => setManualData({ ...manualData, title: e.target.value })}
-                />
-              </div>
+              {/* Task Title */}
+              <input 
+                autoFocus
+                type="text"
+                className="w-full bg-void border border-white/5 rounded-2xl px-5 py-4 text-sm focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-zinc-500"
+                placeholder="What needs to be done?"
+                value={manualData.title}
+                onChange={(e) => setManualData({ ...manualData, title: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && manualData.title.trim()) {
+                    handleManualSubmit();
+                  }
+                }}
+              />
 
-              <div className="space-y-2">
-                <textarea
-                  className="w-full h-24 bg-void border border-white/5 rounded-2xl px-5 py-4 text-sm focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-zinc-500 resize-none shadow-inner"
-                  placeholder="Add details (optional)..."
-                  value={manualData.description}
-                  onChange={(e) => setManualData({ ...manualData, description: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5 flex flex-col">
-                  <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Energy</label>
-                  <select 
-                    className="w-full bg-void border border-white/5 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none appearance-none"
-                    value={manualData.energy}
-                    onChange={(e) => setManualData({ ...manualData, energy: e.target.value })}
+              {/* Quick Action Bar: Project + Duration inline */}
+              <div className="flex gap-2 items-center overflow-x-auto no-scrollbar pb-0.5">
+                {/* Inline Project Pill */}
+                <div className="relative shrink-0">
+                  <select
+                    className="appearance-none bg-void border border-white/5 rounded-xl px-3 py-2 pr-6 text-[10px] font-bold uppercase tracking-widest text-zinc-400 outline-none cursor-pointer hover:border-white/10 transition-all"
+                    value={manualData.projectId}
+                    onChange={(e) => {
+                      const selected = projects.find((p: any) => p.id === e.target.value);
+                      setManualData({ 
+                        ...manualData, 
+                        projectId: e.target.value, 
+                        projectName: e.target.value === "NONE" ? "Inbox" : (selected?.name || "")
+                      });
+                    }}
                   >
-                    <option value="Shallow">Shallow</option>
-                    <option value="Normal">Normal</option>
-                    <option value="Deep">Deep</option>
+                    <option value="NONE">📥 Inbox</option>
+                    {projects.map((p: any) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
                   </select>
+                  <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 pointer-events-none" />
                 </div>
-                <div className="flex items-end">
-                   <button
-                    type="button"
-                    onClick={() => setIsFormExpanded((prev) => !prev)}
-                    className={cn(
-                      "w-full bg-void border border-white/5 rounded-xl px-4 py-3 text-[9px] font-black uppercase tracking-widest transition-all",
-                      isFormExpanded ? "text-primary border-primary/20" : "text-zinc-500 hover:text-zinc-300"
-                    )}
-                  >
-                    {isFormExpanded ? "Collapse" : "More Options"}
-                  </button>
+
+                {/* Inline Duration Pill */}
+                <div className="flex gap-1 shrink-0">
+                  {["15m", "30m", "1h", "2h"].map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setManualData({ ...manualData, duration: d })}
+                      className={cn(
+                        "px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border",
+                        manualData.duration === d
+                          ? "bg-primary/20 border-primary/30 text-primary"
+                          : "bg-void border-white/5 text-zinc-600 hover:text-zinc-400"
+                      )}
+                    >
+                      {d}
+                    </button>
+                  ))}
                 </div>
+
+                {/* Description Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setIsFormExpanded(prev => !prev)}
+                  className={cn(
+                    "shrink-0 px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1",
+                    isFormExpanded
+                      ? "bg-primary/20 border-primary/30 text-primary"
+                      : "bg-void border-white/5 text-zinc-600 hover:text-zinc-400"
+                  )}
+                >
+                  <FileText size={10} />
+                  {manualData.description ? "Edit" : "Note"}
+                </button>
               </div>
 
-              {/* Commitment Selector Row (Visible by default) */}
+              {/* Collapsible Description */}
+              <AnimatePresence>
+                {isFormExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <textarea
+                      autoFocus
+                      className="w-full h-20 bg-void border border-white/5 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-zinc-600 resize-none"
+                      placeholder="Add details..."
+                      value={manualData.description}
+                      onChange={(e) => setManualData({ ...manualData, description: e.target.value })}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Commitment Selector Row */}
               <div className="space-y-1.5 overflow-visible">
                 <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Plan For</label>
                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
@@ -465,7 +512,7 @@ export function QuickCaptureDrawer({
                       type="button"
                       onClick={() => setManualData({ ...manualData, plannedDate: chip.value || "", plannedDateType: 'on' })}
                       className={cn(
-                        "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
+                        "px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
                         ((manualData.plannedDate === chip.value && manualData.plannedDateType === 'on') || (!manualData.plannedDate && chip.value === null))
                           ? "bg-primary/20 border-primary/30 text-primary"
                           : "bg-void border-white/5 text-zinc-500 hover:text-zinc-300"
@@ -476,50 +523,53 @@ export function QuickCaptureDrawer({
                   ))}
                   
                   {/* Flexible Option */}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (manualData.plannedDateType === 'before') {
-                          setManualData({ ...manualData, plannedDateType: 'on', plannedDate: toLocalISOString() });
-                        } else {
-                          setManualData({ ...manualData, plannedDateType: 'before', plannedDate: toLocalISOString(addDays(new Date(), 3)) });
-                        }
-                      }}
-                      className={cn(
-                        "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
-                        manualData.plannedDateType === 'before'
-                          ? "bg-cyan-500/20 border-cyan-500/30 text-cyan-400"
-                          : "bg-void border-white/5 text-zinc-500 hover:text-cyan-400/60"
-                      )}
-                    >
-                      Flexible {manualData.plannedDateType === 'before' ? "▾" : ""}
-                    </button>
-                  </div>
-
                   <button
                     type="button"
                     onClick={() => {
-                      setIsFormExpanded(true);
-                      setManualData({ ...manualData, plannedDateType: 'on' });
+                      if (manualData.plannedDateType === 'before') {
+                        setManualData({ ...manualData, plannedDateType: 'on', plannedDate: toLocalISOString() });
+                      } else {
+                        setManualData({ ...manualData, plannedDateType: 'before', plannedDate: toLocalISOString(addDays(new Date(), 3)) });
+                      }
                     }}
                     className={cn(
-                      "px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
-                      manualData.plannedDate && 
-                      manualData.plannedDateType === 'on' &&
-                      manualData.plannedDate !== toLocalISOString() && 
-                      manualData.plannedDate !== toLocalISOString(addDays(new Date(), 1))
-                        ? "bg-primary/20 border-primary/30 text-primary"
-                        : "bg-void border-white/5 text-zinc-500 hover:text-zinc-300"
+                      "px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
+                      manualData.plannedDateType === 'before'
+                        ? "bg-cyan-500/20 border-cyan-500/30 text-cyan-400"
+                        : "bg-void border-white/5 text-zinc-500 hover:text-cyan-400/60"
                     )}
                   >
-                    {manualData.plannedDate && 
-                     manualData.plannedDateType === 'on' &&
-                     manualData.plannedDate !== toLocalISOString() && 
-                     manualData.plannedDate !== toLocalISOString(addDays(new Date(), 1))
-                      ? format(new Date(manualData.plannedDate), "MMM d")
-                      : "Pick Date..."}
+                    Flex {manualData.plannedDateType === 'before' ? "▾" : ""}
                   </button>
+
+                  {/* Inline Custom Date Picker */}
+                  <div className="relative shrink-0">
+                    <input
+                      type="date"
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
+                      value={manualData.plannedDateType === 'on' ? manualData.plannedDate : ''}
+                      onChange={(e) => setManualData({ ...manualData, plannedDate: e.target.value, plannedDateType: 'on' })}
+                    />
+                    <button
+                      type="button"
+                      className={cn(
+                        "px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all border whitespace-nowrap",
+                        manualData.plannedDate && 
+                        manualData.plannedDateType === 'on' &&
+                        manualData.plannedDate !== toLocalISOString() && 
+                        manualData.plannedDate !== toLocalISOString(addDays(new Date(), 1))
+                          ? "bg-primary/20 border-primary/30 text-primary"
+                          : "bg-void border-white/5 text-zinc-500 hover:text-zinc-300"
+                      )}
+                    >
+                      {manualData.plannedDate && 
+                       manualData.plannedDateType === 'on' &&
+                       manualData.plannedDate !== toLocalISOString() && 
+                       manualData.plannedDate !== toLocalISOString(addDays(new Date(), 1))
+                        ? format(new Date(manualData.plannedDate + 'T00:00:00'), "MMM d")
+                        : "📅"}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -531,17 +581,17 @@ export function QuickCaptureDrawer({
                   className="flex gap-2 overflow-x-auto no-scrollbar pb-1"
                 >
                   {[
-                    { label: "3 Days", days: 3 },
-                    { label: "5 Days", days: 5 },
-                    { label: "7 Days", days: 7 },
-                    { label: "14 Days", days: 14 },
+                    { label: "3d", days: 3 },
+                    { label: "5d", days: 5 },
+                    { label: "7d", days: 7 },
+                    { label: "14d", days: 14 },
                   ].map((opt) => (
                     <button
                       key={opt.label}
                       type="button"
                       onClick={() => setManualData({ ...manualData, plannedDate: toLocalISOString(addDays(new Date(), opt.days)), plannedDateType: 'before' })}
                       className={cn(
-                        "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border",
+                        "px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border",
                         manualData.plannedDate === toLocalISOString(addDays(new Date(), opt.days))
                           ? "bg-cyan-500 text-void border-cyan-500"
                           : "bg-void border-cyan-500/20 text-cyan-500/60 hover:text-cyan-400"
@@ -550,60 +600,74 @@ export function QuickCaptureDrawer({
                       {opt.label}
                     </button>
                   ))}
+                  <div className="relative shrink-0">
+                    <input
+                      type="date"
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
+                      value={manualData.plannedDateType === 'before' ? manualData.plannedDate : ''}
+                      min={toLocalISOString(addDays(new Date(), 1))}
+                      onChange={(e) => setManualData({ ...manualData, plannedDate: e.target.value, plannedDateType: 'before' })}
+                    />
+                    <button
+                      type="button"
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border",
+                        manualData.plannedDateType === 'before' && manualData.plannedDate &&
+                        ![3, 5, 7, 14].some(d => manualData.plannedDate === toLocalISOString(addDays(new Date(), d)))
+                          ? "bg-cyan-500 text-void border-cyan-500"
+                          : "bg-void border-cyan-500/20 text-cyan-500/60 hover:text-cyan-400"
+                      )}
+                    >
+                      {manualData.plannedDateType === 'before' && manualData.plannedDate &&
+                       ![3, 5, 7, 14].some(d => manualData.plannedDate === toLocalISOString(addDays(new Date(), d)))
+                        ? `By ${format(new Date(manualData.plannedDate + 'T00:00:00'), "MMM d")}`
+                        : "📅"}
+                    </button>
+                  </div>
                 </motion.div>
               )}
 
-              {isFormExpanded && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Custom Commitment</label>
-                    <input 
-                      type="date"
-                      className="w-full bg-void border border-white/5 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none transition-all text-white"
-                      value={manualData.plannedDate}
-                      onChange={(e) => setManualData({ ...manualData, plannedDate: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Duration</label>
-                    <input 
-                      type="text"
-                      className="w-full bg-void border border-white/5 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-zinc-500"
-                      placeholder="e.g. 30m, 1h"
-                      value={manualData.duration}
-                      onChange={(e) => setManualData({ ...manualData, duration: e.target.value })}
-                    />
-                  </div>
+              {/* Tags (always visible) */}
+              <TagSelector
+                projectId={manualData.projectId === "NONE" ? undefined : manualData.projectId}
+                selectedTagIds={manualData.tagIds}
+                onToggleTag={(id) => {
+                  setManualData(prev => ({
+                    ...prev,
+                    tagIds: prev.tagIds.includes(id)
+                      ? prev.tagIds.filter(t => t !== id)
+                      : [...prev.tagIds, id]
+                  }));
+                }}
+              />
 
-                  <ProjectSelector
-                    projects={projects}
-                    selectedProjectId={manualData.projectId}
-                    onSelect={(id, name) => {
-                      setManualData({ ...manualData, projectId: id, projectName: name });
-                    }}
-                  />
-
+              {/* Collapsible Advanced Options (Deadline + Recurrence) */}
+              <details className="group">
+                <summary className="text-[9px] font-black text-zinc-600 uppercase tracking-widest cursor-pointer hover:text-zinc-400 transition-colors flex items-center gap-1.5 ml-1 list-none">
+                  <ChevronDown size={10} className="transition-transform group-open:rotate-180" />
+                  Deadline & Recurrence
+                </summary>
+                <div className="mt-3 space-y-3 animate-in fade-in duration-200">
                   <CustomDateTimePicker
                     label="Deadline"
                     value={manualData.dueDate}
                     onChange={(val) => setManualData({ ...manualData, dueDate: val })}
                   />
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Recurrence (Days)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Repeat (Days)</label>
                       <input 
                         type="number"
-                        className="w-full bg-void border border-white/5 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-zinc-500"
+                        className="w-full bg-void border border-white/5 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-zinc-600"
                         placeholder="7"
                         value={manualData.recurrence}
                         onChange={(e) => setManualData({ ...manualData, recurrence: e.target.value })}
                       />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <label className="text-[9px] font-black text-zinc-600 uppercase tracking-widest ml-1">Type</label>
                       <select 
-                        className="w-full bg-void border border-white/5 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none appearance-none"
+                        className="w-full bg-void border border-white/5 rounded-xl px-3 py-2.5 text-sm focus:ring-1 focus:ring-primary outline-none appearance-none"
                         value={manualData.recurrenceType}
                         onChange={(e) => setManualData({ ...manualData, recurrenceType: e.target.value as any })}
                       >
@@ -613,7 +677,8 @@ export function QuickCaptureDrawer({
                     </div>
                   </div>
                 </div>
-              )}
+              </details>
+
 
               <button
                 onClick={handleManualSubmit}

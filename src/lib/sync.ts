@@ -3,15 +3,15 @@ import { createClient } from './supabase';
 import { useSyncStore } from '@/store/syncStore';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
-const SYNC_TABLES = ['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards'] as const;
+const SYNC_TABLES = ['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards', 'tags', 'task_tags'] as const;
 const LAST_SYNC_KEY = 'productivity_engine_last_sync';
 const MAX_OUTBOX_RETRIES = 5;
 const OUTBOX_BATCH_GROUP_LIMIT = 20;
 
 // Tables that have updated_at columns (used for incremental sync)
-const INCREMENTAL_TABLES = new Set(['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards']);
+const INCREMENTAL_TABLES = new Set(['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards', 'tags', 'task_tags']);
 // Tables that have is_deleted columns (used for archival purge)
-const SOFT_DELETE_TABLES = new Set(['projects', 'tasks', 'notes', 'subtasks', 'context_cards']);
+const SOFT_DELETE_TABLES = new Set(['projects', 'tasks', 'notes', 'subtasks', 'context_cards', 'tags']);
 
 // ─── Debounce & Mutex ──────────────────────────────────────────────────────
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -110,7 +110,7 @@ async function _processOutboxBatched() {
       let error;
 
       if (action === 'insert' || action === 'update') {
-        const tablesWithUserId = new Set(['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards']);
+        const tablesWithUserId = new Set(['projects', 'tasks', 'notes', 'activity_logs', 'subtasks', 'context_cards', 'tags']);
 
         if (action === 'insert') {
           // For inserts, we need full records from Dexie (they were just created locally)

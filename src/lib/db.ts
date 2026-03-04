@@ -106,7 +106,23 @@ export interface ProjectCustomization {
   };
   updated_at: string;
 }
+export interface Tag {
+  id: string;
+  user_id?: string;
+  project_id?: string; // NULL = global
+  name: string;
+  color?: string;
+  is_deleted?: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
+export interface TaskTag {
+  id: string;
+  task_id: string;
+  tag_id: string;
+  created_at: string;
+}
 
 
 export class EntropyDatabase extends Dexie {
@@ -118,6 +134,8 @@ export class EntropyDatabase extends Dexie {
   context_cards!: Table<ContextCard>;
   project_customizations!: Table<ProjectCustomization>;
   sync_outbox!: Table<SyncOutbox>;
+  tags!: Table<Tag>;
+  task_tags!: Table<TaskTag>;
 
   constructor() {
     super('EntropyDatabase');
@@ -165,6 +183,18 @@ export class EntropyDatabase extends Dexie {
       project_customizations: 'projectId',
       sync_outbox: '++id, timestamp, retry_count'
     });
+    this.version(14).stores({
+      projects: 'id, user_id, name, last_touched_at, is_deleted',
+      tasks: 'id, user_id, project_id, state, due_date, sort_order, is_deleted, planned_date, planned_date_type',
+      activity_logs: 'id, user_id, task_id, project_id',
+      notes: 'id, user_id, project_id, task_id, sort_order, is_read, is_deleted',
+      subtasks: 'id, user_id, task_id, is_deleted',
+      context_cards: 'id, user_id, project_id, is_deleted',
+      project_customizations: 'projectId',
+      sync_outbox: '++id, timestamp, retry_count',
+      tags: 'id, project_id, name, is_deleted',
+      task_tags: 'id, task_id, tag_id'
+    });
   }
 
   /**
@@ -179,7 +209,9 @@ export class EntropyDatabase extends Dexie {
       this.notes.clear(),
       this.subtasks.clear(),
       this.context_cards.clear(),
-      this.sync_outbox.clear()
+      this.sync_outbox.clear(),
+      this.tags.clear(),
+      this.task_tags.clear()
     ]);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('entropy_sync_timestamps');

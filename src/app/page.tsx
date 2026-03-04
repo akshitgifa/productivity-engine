@@ -304,7 +304,7 @@ export default function Home() {
     } finally {
       queryClient.invalidateQueries({ queryKey: ['tasks', 'today'] });
     }
-  }, [queryClient]);
+  }, [queryClient, selectedDate]);
 
 
 
@@ -463,7 +463,7 @@ export default function Home() {
   const handleReschedule = async (taskId: string, date: string | null, type: 'on' | 'before' = 'on') => {
     await taskService.setPlannedDate(taskId, date, type);
     queryClient.invalidateQueries({ queryKey: ["tasks"] });
-    addToast(`Task rescheduled to ${date}`, 'success');
+    addToast(`Task rescheduled to ${format(new Date(date + 'T00:00:00'), 'MMM d')}`, 'success');
   };
 
   // Reorder handler: updates local state for smooth drag

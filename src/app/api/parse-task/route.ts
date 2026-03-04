@@ -15,11 +15,7 @@ Rules:
 5. Default duration to "30m" if unspecified.
 6. Use the "Current Context" (Time/Date) to inform duration, recurrence, or "dueDate" if relative terms are used.
 7. If a specific deadline or time is mentioned (e.g. "by 5pm", "next Tuesday", "tomorrow noon"), extract it into "dueDate" as an ISO 8601 string. If no deadline is mentioned, "dueDate" should be null.
-8. Map "energy" to one of: "Deep", "Normal", "Shallow".
-   - Deep: High focus (Strategic, Design, Writing).
-   - Normal: Standard focus (Coding, Logistics).
-   - Shallow: Low focus (Admin, Quick tasks).
-9. If the user provides supporting details, context, or steps, capture them in "description" (Markdown allowed). Keep it short.
+8. If the user provides supporting details, context, or steps, capture them in "description" (Markdown allowed). Keep it short.
 9. IMPORTANT: All output (task title, project suggestions) MUST be in English only, regardless of the input language, unless explicitly specified otherwise by the user.
 `;
 
@@ -39,10 +35,6 @@ const schema: Schema = {
       type: SchemaType.STRING,
       description: "Estimated time (e.g., '15m', '1h', '4h')",
     },
-    energy: {
-      type: SchemaType.STRING,
-      description: "Energy type (Deep, Normal, Shallow)",
-    },
     description: {
       type: SchemaType.STRING,
       description: "Short task description (Markdown allowed, optional)",
@@ -59,7 +51,7 @@ const schema: Schema = {
       nullable: true,
     },
   },
-  required: ["task", "project", "duration", "energy"],
+  required: ["task", "project", "duration"],
 };
 
 export async function POST(req: Request) {

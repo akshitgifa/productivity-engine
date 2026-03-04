@@ -68,6 +68,22 @@ export const taskService = {
 
     await db.tasks.add(processed as any);
     await db.recordAction('tasks', 'insert', processed);
+
+    // Handle tag assignments if present
+    if (taskData.tagIds && Array.isArray(taskData.tagIds)) {
+      for (const tagId of taskData.tagIds) {
+        const taskTag = {
+          id: crypto.randomUUID(),
+          task_id: processed.id,
+          tag_id: tagId,
+          created_at: now,
+          updated_at: now
+        };
+        await db.task_tags.add(taskTag);
+        await db.recordAction('task_tags', 'insert', taskTag);
+      }
+    }
+
     processOutbox().catch(() => {});
   },
 
@@ -269,4 +285,39 @@ export const taskService = {
 
     return { success: true };
   },
+
+  /**
+   * Set tags for a task (syncs junction table).
+   */
+  async setTags(taskId: string, tagIds: string[]): Promise<void> {
+    const now = new Date().toISOString();
+    
+    // 1. Get current tags
+    const currentTags = await db.task_tags.where('task_id').equals(taskId).toArray();
+    const currentTagIds = new Set(currentTags.map(t => t.tag_id));
+    const targetTagIds = new Set(tagIds);
+
+    // 2. Identify tags to remove
+    const toRemove = currentTags.filter(t => !targetTagIds.has(t.tag_id));
+    for (const jt of toRemove) {
+      await db.task_tags.delete(jt.id);
+      await db.recordAction('task_tags', 'delete', { id: jt.id });
+    }
+
+    // 3. Identify tags to add
+    const toAdd = tagIds.filter(id => !currentTagIds.has(id));
+    for (const tagId of toAdd) {
+      const taskTag = {
+        id: crypto.randomUUID(),
+        task_id: taskId,
+        tag_id: tagId,
+        created_at: now,
+        updated_at: now
+      };
+      await db.task_tags.add(taskTag);
+      await db.recordAction('task_tags', 'insert', taskTag);
+    }
+
+    processOutbox().catch(() => {});
+  }
 };

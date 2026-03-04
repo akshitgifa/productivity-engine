@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { cn, formatTimeRemaining } from "@/lib/utils";
 import { hexToRgba } from "@/lib/colors";
-import { RotateCcw, Trash2, Check, Maximize2, AlertCircle, Calendar, MoreHorizontal, CalendarX, Sparkles } from "lucide-react";
+import { RotateCcw, Trash2, Check, Maximize2, AlertCircle, Calendar, MoreHorizontal, CalendarX, Sparkles, CalendarPlus } from "lucide-react";
 import { motion, useMotionValue, animate, AnimatePresence } from "framer-motion";
 import { useMediaQuery } from "@/hooks/use-media-query";
 
@@ -118,7 +118,12 @@ export function FocusCard({
           {plannedDateType === 'before' && plannedDate && (
              <span className="text-[10px] font-bold text-cyan-500/80 bg-cyan-500/5 px-2 py-0.5 rounded-full border border-cyan-500/20">
                Within {(() => {
-                 const diff = Math.ceil((new Date(plannedDate).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24));
+                 // Use local date comparison to avoid UTC offset issues
+                 const plannedParts = plannedDate.split('-').map(Number);
+                 const today = new Date();
+                 const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+                 const plannedMs = new Date(plannedParts[0], plannedParts[1] - 1, plannedParts[2]).getTime();
+                 const diff = Math.ceil((plannedMs - todayMs) / (1000 * 60 * 60 * 24));
                  return diff > 0 ? diff : 0;
                })()} days
              </span>
@@ -292,21 +297,42 @@ export function FocusCard({
                 </button>
 
                 {onUnplan && (
-                  <button 
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      onUnplan(); 
-                      setIsMenuOpen(false);
-                      animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
-                    }}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-rose-500/10 text-zinc-500 hover:text-rose-500 transition-all text-left group/item mt-1 border-t border-white/5 pt-2"
-                  >
-                    <div className="w-6 h-6 rounded-lg bg-rose-500/5 flex items-center justify-center border border-rose-500/10 group-hover/item:border-rose-500/20">
-                      <CalendarX size={12} />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest">Remove Plan</span>
-                  </button>
+                <button 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    onUnplan?.(); 
+                    setIsMenuOpen(false);
+                    animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+                  }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-rose-500/10 text-zinc-500 hover:text-rose-500 transition-all text-left group/item mt-1 border-t border-white/5 pt-2"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-rose-500/5 flex items-center justify-center border border-rose-500/10 group-hover/item:border-rose-500/20">
+                    <CalendarX size={12} />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Remove Plan</span>
+                </button>
                 )}
+
+                {/* Custom Date Picker */}
+                <div className="mt-1 border-t border-white/5 pt-2">
+                  <label className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/5 text-zinc-300 hover:text-white transition-all cursor-pointer text-left group/item relative">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 group-hover/item:border-emerald-400/40">
+                      <CalendarPlus size={12} className="text-emerald-400" />
+                    </div>
+                    <span className="text-[11px] font-bold">Custom Date...</span>
+                    <input 
+                      type="date" 
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setIsMenuOpen(false);
+                          animate(x, 0, { type: "spring", stiffness: 300, damping: 30 });
+                          onReschedule?.(e.target.value, 'on');
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
             </motion.div>
           </>

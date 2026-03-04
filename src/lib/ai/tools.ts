@@ -44,7 +44,7 @@ export function getTools(supabase: SupabaseClient, google: any) {
         if (type === 'task_distribution' || type === 'all') {
           const { data: tasks } = await supabase
             .from('tasks')
-            .select('id, state, energy_tag, projects(name, tier)');
+            .select('id, state, projects(name, tier)');
           data.tasks = tasks ?? [];
         }
 
